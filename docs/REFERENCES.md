@@ -1,0 +1,174 @@
+# References
+
+Every source is pinned to a commit or tag, so a reviewer reads the same lines the spec was
+written from. Live values are in [`evidence/live-facts.json`](evidence/live-facts.json), a
+read-only snapshot; the table below names the storage items each value comes from, so any
+reviewer can re-read them (Polkadot.js Apps, papi or Subscan).
+
+## Pins
+
+| Short | Repository | Pin | Why this pin |
+|---|---|---|---|
+| PR | `paseo-network/runtimes` | tag `v2.5.4-parachains` = `47bac4408e2d4d9a0eb91f1d55077945a552f2b9` | live Paseo AH and People run spec `2_005_004` |
+| IC | `paritytech/individuality-community` | `1e7dcb9664240625924da6b8bd32ec300b294742` | pinned in PR `Cargo.lock` |
+| SDK | `paritytech/polkadot-sdk` | `polkadot-stable2606-2` = `72284b37a234f8a1565f2043ddbf8280a69fcf29` | revive 0.19.1 and precompile crates in PR `Cargo.lock` |
+| VF | crate `verifiable` | `0.3.0` | locked in PR `Cargo.lock` |
+| TRU | `paritytech/truapi` | `954f1a7faed39605e2f548be6df8c7bc5316b518` (main) and `adebf980c42dc57f8a31618e4b0ad31af013bfc0` (`@parity/truapi@0.13.1`) | RFCs on main; 0.13.1 is the wire the deployed hosts speak |
+| PSDK | `paritytech/product-sdk` | `b4be45fac5612791623f423cfe55dfe44a301c31` | upstream main |
+| FAU | `paritytech/polkadot-testnet-faucet` | `ef23e1997f7c747ab13daf64d7fb568f245bdb3f` | upstream main |
+| DNS | `paritytech/dotns` | `620e7faa9797a1346c6b1e5726907d1415f4b65d` | upstream master |
+| PF | `polkadot-fellows/runtimes` | tag `v2.5.0` = `3936c7e4d42b449b964e41bd7b69d5f1db1e3a1f` | Polkadot AH and People with individuality |
+
+## Live evidence
+
+| Id | Chain and block | Storage items read |
+|---|---|---|
+| E1 | Paseo Asset Hub, block `14473665` (`wss://asset-hub-paseo-rpc.n.dwellir.com`) | `MembersSubscriber.{Subscription, RingCollectionStates, RingRoots}`, `AliasAccounts.AccountToAlias`, `Pgas.ClaimedGasAliases` and constants, `Assets.{Asset, Metadata}(50000413)`, `Psm.{Psm, ExternalAssets, MintingFee, RedemptionFee}`, `AssetConversionApi.get_reserves(PAS, pUSD)`, `NetworkSuffix.NetworkSuffix`, `Parameters.Parameters`, `Sudo.Key`, `Revive.ChainId` |
+| E1 | Paseo People, block `7759733` (`wss://rpc.interweb-it.com/people-paseo`) | `PeopleLite.{LitePeople, AttestationAllowance}`, `People.People`, `DummyDim.People`, `Members.{OnboardingSize, Root, RingKeys}` (personhood collections only), `Parameters.Parameters` |
+| E2 | Polkadot Asset Hub, block `21860550` (`wss://asset-hub-polkadot-rpc.n.dwellir.com`) | `Assets.{Asset, Metadata}(7873)`, `Psm.ExternalAssets`, `MembersSubscriber.{Subscription, RingRoots}`, `AliasAccounts.AccountToAlias` |
+| E3 | Current faucet balance, about 3,052,437 PAS | `GET https://paseo-faucet.parity-testnet.parity.io/balance` |
+| E5 | Paseo People, block `7770210` (`wss://rpc.interweb-it.com/people-paseo`): pUSD registered as "Digital Dollar" (`pUSD`, 6 decimals) at the Asset Hub location, minimum balance 10,000, sufficient | `Assets.{Asset, Metadata}((1, Parachain(1000), PalletInstance(50), GeneralIndex(50000413)))` |
+| E4 | Paseo Asset Hub's HRMP channels, as Asset Hub records them at relay parent `1508302` (relay providers `wss://paseo-rpc.n.dwellir.com`, `wss://rpc-paseo.stakeworld.io`, `wss://paseo-v2.rpc.turboflakes.io` agree on that height) | `ParachainSystem.RelevantMessagingState`: egress and ingress both `1002, 1004, 1005, 1010, 1500, 1501, 1502, 2030, 2034, 2043, 2086, 2281, 3345, 3369, 3377, 4009, 4683, 5118, 5140, 5150, 5160, 5167, 5168` |
+
+## The faucet today
+
+| Id | Claim | Source (FAU) |
+|---|---|---|
+| F1 | Repository | https://github.com/paritytech/polkadot-testnet-faucet/tree/ef23e1997f7c747ab13daf64d7fb568f245bdb3f |
+| F2 | Backend holds and signs with the faucet mnemonic | [`env.faucet.config.json#L40`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/env.faucet.config.json#L40), [`src/papi/signer.ts`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/src/papi/signer.ts) |
+| F3 | Matrix bot `!drip` | [`src/bot/index.ts#L139`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/src/bot/index.ts#L139) |
+| F4 | Captcha or signature, privileged Matrix users, daily quota | [`src/dripper/DripRequestHandler.ts#L44-L69`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/src/dripper/DripRequestHandler.ts#L44-L69) |
+| F5 | Paseo network data: 5000 PAS drip, 5500 PAS cap, destinations, whitelist | [`src/papi/chains/paseo.ts#L17-L45`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/src/papi/chains/paseo.ts#L17-L45) |
+| F6 | 20 h quota on sha256 of address and username | [`src/dripper/dripperStorage.ts#L5`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/src/dripper/dripperStorage.ts#L5) |
+| F7 | CI publishes the client to `faucet.dot` with `bulletin-deploy` | [`.github/workflows/deploy-dotns.yml#L59-L75`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/.github/workflows/deploy-dotns.yml#L59-L75) |
+| F8 | Host mode: product-sdk accounts and `signRaw` | [`client/src/lib/utils/hostApi.ts#L29-L72`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/client/src/lib/utils/hostApi.ts#L29-L72) |
+| F9 | Signed message `faucet:{address}:{timestamp}` replaces the captcha | [`src/dripper/signatureVerify.ts#L5-L41`](https://github.com/paritytech/polkadot-testnet-faucet/blob/ef23e1997f7c747ab13daf64d7fb568f245bdb3f/src/dripper/signatureVerify.ts#L5-L41) |
+| W1 | Paseo website lists the faucet | `paseo-network/paseo-website` `src/constants/developers.ts` (`faucet.faucets`) |
+
+## Individuality pallets and precompile (IC)
+
+Base: `https://github.com/paritytech/individuality-community/blob/1e7dcb9664240625924da6b8bd32ec300b294742/`
+
+| Id | Claim | Path |
+|---|---|---|
+| P1 | Repository | `/` |
+| P2 | Collection identifiers, ring exponent `R2e9` (255 members) | `support/src/traits/reality.rs#L72-L79`, `#L264`, `#L267` |
+| P3 | Alias = hash of the VRF output over `"VerifiableBandersnatchVrfInput" ++ context` | VF `src/ring/mod.rs` L854-L858 (https://docs.rs/crate/verifiable/0.3.0/source/src/ring/mod.rs) |
+| P4 | `PeopleLite.attest` and attestation allowances | `pallets/people-lite/src/lib.rs#L295-L308`, `#L363-L428` |
+| P5 | `PeopleLite.register_with_fee` | `pallets/people-lite/src/lib.rs#L448-L507` |
+| P7 | `DummyDim.recognize_personhood` origin | `pallets/dummy-dim/src/lib.rs#L165-L175` |
+| P8 | `Pgas.claim_pgas` is `Pays::No`, per-day contexts | `pallets/pgas/src/lib.rs#L17-L45`, `#L343-L374` |
+| P9 | `IPersonhood` interface, address, message-binding warning | `precompiles/personhood/sol/IPersonhood.sol#L21`, `#L40-L95` (warning `#L63-L67`) |
+| P10 | `personhood_info`: one binding per account, must match the context | `pallets/alias-accounts/src/lib.rs#L725-L746` |
+| P11 | `set_alias_account`, fee, one-account-one-alias | `pallets/alias-accounts/src/lib.rs#L425-L490` (`#L436`, `#L464`), message `#L941` |
+| P13 | `personhood_info_by_proof` and the precompile wrapper | `pallets/alias-accounts/src/lib.rs#L751-L766`, `precompiles/personhood/src/lib.rs#L174-L240`, `pallets/members-subscriber/src/lib.rs#L1191-L1229` |
+| P14 | Proof type `BoundedVec<u8, 1265>`, size check before decode | `pallets/alias-accounts/src/types.rs#L29-L30`, `precompiles/personhood/src/lib.rs#L199-L214`, VF `src/ring/mod.rs` L287-L299, L773 |
+| P15 | `build_product_context` and the index magic | `support/src/context.rs#L55-L88` |
+
+## Paseo runtimes (PR)
+
+Base: `https://github.com/paseo-network/runtimes/blob/47bac4408e2d4d9a0eb91f1d55077945a552f2b9/`
+
+| Id | Claim | Path |
+|---|---|---|
+| R1 | Individuality pallets pinned at IC | `Cargo.toml#L51-L68`, `Cargo.lock` (`indiv-precompile-personhood`) |
+| R2 | Ring-root notifier endpoint and sibling check | `system-parachains/asset-hub-paseo/src/lib.rs#L2477-L2507` |
+| R3 | `OldRootRetentionDuration = 21_600`, `MaxRecentRootsPerRing = 3` | `system-parachains/asset-hub-paseo/src/lib.rs#L2530-L2544` |
+| R4 | `PGASCallFilter`, `ChargePGAS`, `PGasDeposit`; Ethereum transactions built with `new_skip_pgas` | `system-parachains/asset-hub-paseo/src/lib.rs#L1768-L1775`, `#L2864-L2876`, `#L3125`, `#L3163-L3170` |
+| R5 | Revive precompile set and personhood config | `system-parachains/asset-hub-paseo/src/lib.rs#L1738-L1749`, `#L2472-L2475` |
+| R6 | `AliasFee` default `None`, alias-accounts config | `system-parachains/asset-hub-paseo/src/lib.rs#L1445-L1459`, `#L2622-L2650` |
+| R7 | `personhood_info_by_proof` and `personhood_info` weights | `system-parachains/asset-hub-paseo/src/weights/indiv_pallet_alias_accounts.rs#L267-L290` |
+| R8 | `NETWORK_SUFFIX = b"dot"` | `system-parachains/constants/src/paseo.rs#L169-L190` |
+| R9 | Value-transfer authorisation removed | https://github.com/paseo-network/runtimes/pull/421 |
+| R10 | `AuthorizeValueTransfer` replaced by `()` | `system-parachains/asset-hub-paseo/src/lib.rs#L213`, `#L3104` |
+| R11 | `Psm` pallet index 59, absent from the precompile set | `system-parachains/asset-hub-paseo/src/lib.rs#L3034`, `#L1738-L1749` |
+| R12 | Asset-conversion precompile `0x0420` | `system-parachains/asset-hub-paseo/src/lib.rs#L2977`; interface SDK `substrate/frame/asset-conversion/precompiles/src/lib.rs#L56-L161` |
+| R13 | Revive config: chain id, ratio, AutoMap, `AutoMapper` on new accounts | `system-parachains/asset-hub-paseo/src/lib.rs#L300`, `#L1750-L1775` |
+| R14 | `AttestationAllowanceManager = EnsureRoot` | `system-parachains/people-paseo/src/people.rs#L1555` |
+| R15 | `lite_personhood::RegistrationFee = 75 * UNITS` | `system-parachains/people-paseo/src/parameters.rs#L121-L127` |
+| R16 | Runtime flags the lite fee as the only rate limit | `system-parachains/people-paseo/src/people.rs#L1548-L1553` |
+| R17 | `DummyDim` update origin is Root | `system-parachains/people-paseo/src/people.rs#L421-L423` |
+| R18 | Asset Hub XCM trust: reserves only for foreign assets; PAS teleports with the relay and system parachains; pUSD teleports with People | `system-parachains/asset-hub-paseo/src/xcm_config.rs#L401-L435` |
+| R19 | Asset Hub XCM filters open to signed origins; fee waivers only for system locations | `system-parachains/asset-hub-paseo/src/xcm_config.rs#L389-L398`, `#L610-L613` |
+| R20 | Coretime and Bridge Hub runtimes hold native balances only: no `pallet_assets` in either (both report spec `2_003_002` in this release) | `system-parachains/coretime-paseo/src/lib.rs#L700-L730`, `system-parachains/bridge-hub-paseo/src/lib.rs#L720-L740` |
+| R21 | People accepts pUSD only as a teleport from Asset Hub (never as a reserve transfer), and uses it for fees, mob rule, proof of ink and scores | `system-parachains/people-paseo/src/xcm_config.rs#L276-L305`, `#L361-L369`, `#L409-L411`; `system-parachains/people-paseo/src/people.rs#L298-L308`, `#L661`, `#L776`, `#L809` |
+| R22 | The pUSD location shared by Asset Hub and People: `(1, Parachain(1000), PalletInstance(50), GeneralIndex(50000413))` | `relay/paseo/constants/src/lib.rs#L239-L261` |
+
+## polkadot-sdk (SDK)
+
+Base: `https://github.com/paritytech/polkadot-sdk/blob/72284b37a234f8a1565f2043ddbf8280a69fcf29/`
+
+| Id | Claim | Path |
+|---|---|---|
+| S1 | `ISystem`: `hashBlake256`, `toAccountId` | `substrate/frame/revive/uapi/sol/ISystem.sol#L4-L22` |
+| S2 | ERC20 precompile: address layout, supported calls | `substrate/frame/assets/precompiles/src/lib.rs#L86-L120`, `#L178-L198`; `substrate/frame/revive/src/precompiles.rs#L76-L98` |
+| S3 | XCM precompile interface (v5 only) | `polkadot/xcm/pallet-xcm/precompiles/src/interface/IXcm.sol#L5-L40`, `polkadot/xcm/pallet-xcm/precompiles/src/lib.rs#L73-L142` |
+| S4 | H160 to `AccountId32` mapping and the `0xEE` fallback | `substrate/frame/revive/src/address.rs#L107-L147` |
+| S5 | Transfers to a new account pull the ED from the origin | `substrate/frame/revive/src/exec.rs#L1650-L1709` |
+| S6 | `block.timestamp` is the block time in seconds | `substrate/frame/revive/src/exec.rs#L432-L433`, `#L2372-L2374` |
+| S7 | How a transfer type is chosen: teleport if the destination is a trusted teleporter, otherwise local reserve when the asset is local or teleportable from its home | `polkadot/xcm/xcm-executor/src/traits/asset_transfer.rs#L58-L84` |
+
+## TrUAPI, product-sdk and docs
+
+| Id | Claim | Source |
+|---|---|---|
+| T1 | `create_account_proof` response: proof, contextual alias, ring index, ring revision | TRU 0.13.1 `rust/crates/truapi/src/v01/account.rs#L88-L106`, `#L351-L359` |
+| T2 | product-sdk `listRingVrfKeys`, `findRingVrfKeyHandle`, `createRingVRFProof` | PSDK `product-sdk/packages/host/src/accounts.ts#L193`, `#L296`, `#L320`, `#L545` |
+| T3 | RFC-0024: foreign key handles need the owner's allowlist; `pallet-alias-accounts` accepts any context | TRU main `docs/rfcs/0024-personhood-as-product.md#L217`, `#L234`, `#L238` |
+| T4 | `resourceAllocation.request([SmartContractAllowance])` | TRU 0.13.1 `rust/crates/truapi/src/api/resource_allocation.rs#L16`, `rust/crates/truapi/src/v01/resource_allocation.rs#L17-L27` |
+| T5 | RFC-0022 product accounts `//product//{productId}/{index}` | TRU main `docs/rfcs/0022-account-derivations.md#L20`, `#L91` |
+| T6 | Build and publish a product; SDK network presets ("devnet" = Paseo AH genesis `0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2`) | `Polkadot-Community-Foundation/polkadot-app-docs` `docs/guides/build-and-publish.md`, `docs/guides/platform-services-sdk.md`; PSDK `product-sdk/packages/chain-client/src/presets.ts#L363` |
+| T7 | Version skew: product-sdk upstream pins `@parity/truapi ^0.24.0`; the PCF fork used by deployed products pins `^0.13.1` | PSDK `product-sdk/pnpm-workspace.yaml#L8` (both forks) |
+
+## Hosts
+
+Read at the builds below. Line numbers are at those commits.
+
+| Id | Host | Pin | Finding |
+|---|---|---|---|
+| H1 | Polkadot app, Android | `paritytech/polkadot-android-community` `0b2214a8bfb09024d580a1f86a0a006009e06714` | reserved `peopl.<tld>` handles (index 0 full, 1 lite) served to any product: `feature/products/impl/.../accountsProtocol/registry/ReservedRingVrfKeys.kt`; allowlist not enforced, one-time prompt only for cross-product contexts: `.../accountsProtocol/RealAccountsProtocol.kt#L126-L127`, `#L225-L249` |
+| H2 | Polkadot app, iOS | `polkadot-ios-community` `2cb5333075bb1945aac32ee88999dcb6d650aa60` (`ios-dev-v0.1.7`) | `Packages/Products/product-container/src/index.ts#L270`, `#L295` destructure 2 and 3 parameters where host-api sends 3 and 4 |
+| H3 | Polkadot Desktop | `polkadot-desktop-community` `733d4316b0bae101b1963413e6a0f22b2d2208dc` (`v0.1.3`) | `src/widgets/ProductContainerBinding/integrations/accounts.tsx#L364-L370`: foreign key → `NotAllowlisted` |
+| H4 | dot.li (truapi host) | TRU 0.13.1 | `rust/crates/truapi-server/src/runtime.rs#L1173-L1177`: foreign key → `NotAllowlisted` |
+| H5 | Polkadot app, Android | as H1 | PGAS top-up when signing `Revive`-only transactions: `feature/products/impl/.../hostApi/sponsoring/SponsorReviveCallsWithPgas.kt` |
+
+## DotNS (DNS)
+
+Base: `https://github.com/paritytech/dotns/blob/620e7faa9797a1346c6b1e5726907d1415f4b65d/`
+
+| Id | Claim | Path |
+|---|---|---|
+| D1 | `PopRules` reads `personhoodStatus(account, bytes32("dotns"))` | `contracts/pop/PopRules.sol#L337`, `contracts/utils/DotnsConstants.sol#L27-L33` |
+| D2 | Label length bands: 6 to 8 need personhood and are closed until `shortNamesEnabled`; 9 and more are open | `contracts/pop/PopRules.sol#L29-L36`, `#L120` |
+
+## Polkadot runtimes (PF)
+
+Base: `https://github.com/polkadot-fellows/runtimes/blob/3936c7e4d42b449b964e41bd7b69d5f1db1e3a1f/`
+
+| Id | Claim | Path |
+|---|---|---|
+| K1 | Polkadot AH `AliasFee` is always `Some(dynamic parameter)` | `system-parachains/asset-hubs/asset-hub-polkadot/src/individuality.rs#L132-L156` |
+| K2 | Polkadot AH `OldRootRetentionDuration = 600` | `system-parachains/asset-hubs/asset-hub-polkadot/src/individuality.rs#L127` |
+
+## Computed values
+
+Product contexts, as both the host (TRU main `runtime/signing_host/ring_vrf.rs`) and the runtime
+(P15) derive them:
+
+```python
+import hashlib, struct
+b2 = lambda x: hashlib.blake2b(x, digest_size=32).digest()
+magic = b2(b"product-account-index")[:28]          # 12e86013736c5498f050b03cdc16957dff0e422fb92ca77ec3ab168f
+idx = lambda n: struct.pack("<I", n) + magic
+ctx = lambda product_id, n: b2(b"product/" + product_id.encode() + b"/" + idx(n))
+```
+
+| productId | suffix | context |
+|---|---|---|
+| `faucet.dot` | `Index(0)` | `0x31c1b89cf59d9a9e3feeb55781674e2608785c7743d990f1eabc84f2c185e202` |
+| `faucet.dot` | `Index(1)` | `0x2e49b0091ac03891906d1ce9354c1287f6bac0a594b95de162a92f10e0703da1` |
+| `paseofaucet.dot` | `Index(0)` | `0x8b46236bc1bffb24e1a0750e3e6932d7255b508c57ed0d495842cf105576d71f` |
+
+pUSD ERC20 precompile address: `50000413 = 0x02FAF21D`, so
+`0x02FaF21d00000000000000000000000001200000` (S2; `decimals()` = 6 and `symbol()` = `pUSD` read
+live).

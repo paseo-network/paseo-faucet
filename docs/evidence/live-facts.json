@@ -1,0 +1,349 @@
+{
+  "asset_hub": {
+    "endpoint": "wss://asset-hub-paseo-rpc.n.dwellir.com",
+    "block": 14473665,
+    "hash": "0x3705147809f2f557cac4436bba69ad02b95cbd587113be310c7cef7bd5dfe4b6",
+    "spec_name": "asset-hub-paseo",
+    "spec_version": 2005004,
+    "existential_deposit": "100000000",
+    "revive_chain_id": "420420417",
+    "network_suffix": "dot",
+    "parameter_overrides": [],
+    "members_subscriber": {
+      "subscription": {
+        "type": "Active",
+        "value": {
+          "initialized_at_sequence": "0"
+        }
+      },
+      "collections": [
+        {
+          "collection": "pop:polkadot.network/people-lite",
+          "ring_count": 4,
+          "next_ring_index": 4,
+          "next_scan_index": 4,
+          "missing_indices": [],
+          "deleted_indices": []
+        },
+        {
+          "collection": "pop:polkadot.network/people     ",
+          "ring_count": 1,
+          "next_ring_index": 1,
+          "next_scan_index": 0,
+          "missing_indices": [],
+          "deleted_indices": []
+        }
+      ],
+      "ring_roots": [
+        [
+          0,
+          "pop:polkadot.network/people-lite",
+          0
+        ],
+        [
+          0,
+          "pop:polkadot.network/people-lite",
+          2
+        ],
+        [
+          0,
+          "pop:polkadot.network/people-lite",
+          1
+        ],
+        [
+          0,
+          "pop:polkadot.network/people-lite",
+          3
+        ],
+        [
+          0,
+          "pop:polkadot.network/people     ",
+          0
+        ]
+      ]
+    },
+    "alias_accounts": {
+      "account_to_alias": 0,
+      "proof_validity_window_s": "300"
+    },
+    "pgas": {
+      "asset_id": 2000000000,
+      "claim_amount": "50000000000",
+      "max_claims_per_period_person": 100,
+      "max_claims_per_period_lite_person": 40,
+      "claimed_gas_aliases": 17
+    },
+    "pusd": {
+      "details": {
+        "owner": "5FX9eGJYqJTmjJDQrQpzEjGh7qQHNscW9uL1X17aXkiFN6u1",
+        "issuer": "5FX9eGJYqJTmjJDQrQpzEjGh7qQHNscW9uL1X17aXkiFN6u1",
+        "admin": "5FX9eGJYqJTmjJDQrQpzEjGh7qQHNscW9uL1X17aXkiFN6u1",
+        "freezer": "5FX9eGJYqJTmjJDQrQpzEjGh7qQHNscW9uL1X17aXkiFN6u1",
+        "supply": "20995901990000487560486857",
+        "deposit": "2019000000",
+        "min_balance": "10",
+        "is_sufficient": true,
+        "accounts": 22,
+        "sufficients": 10,
+        "approvals": 8,
+        "status": {
+          "type": "Live"
+        }
+      },
+      "metadata": {
+        "deposit": "2008200000",
+        "name": "People USD",
+        "symbol": "pUSD",
+        "decimals": 6,
+        "is_frozen": false
+      }
+    },
+    "psm": {
+      "instances": [
+        {
+          "key": [
+            {
+              "parents": 0,
+              "interior": {
+                "type": "X2",
+                "value": [
+                  {
+                    "type": "PalletInstance",
+                    "value": 50
+                  },
+                  {
+                    "type": "GeneralIndex",
+                    "value": "50000413"
+                  }
+                ]
+              }
+            }
+          ],
+          "value": {
+            "fee_destination": "5EYCAe5gL64AKA9ajyEA1zud8ShewpAHDc7fQBx49Zn5KRip",
+            "max_debt": "10000000000000",
+            "min_swap_amount": "1000000",
+            "internal_decimals": 6,
+            "external_count": 1
+          }
+        }
+      ],
+      "external_assets": [
+        {
+          "key": [
+            {
+              "parents": 0,
+              "interior": {
+                "type": "X2",
+                "value": [
+                  {
+                    "type": "PalletInstance",
+                    "value": 50
+                  },
+                  {
+                    "type": "GeneralIndex",
+                    "value": "50000413"
+                  }
+                ]
+              }
+            },
+            {
+              "parents": 0,
+              "interior": {
+                "type": "X2",
+                "value": [
+                  {
+                    "type": "PalletInstance",
+                    "value": 50
+                  },
+                  {
+                    "type": "GeneralIndex",
+                    "value": "1984"
+                  }
+                ]
+              }
+            }
+          ],
+          "value": {
+            "status": {
+              "type": "AllEnabled"
+            },
+            "decimals": 6
+          }
+        }
+      ],
+      "minting_fee": [
+        0
+      ],
+      "redemption_fee": [
+        100
+      ]
+    },
+    "pas_pusd_pool_reserves": [
+      "24969734774619933",
+      "2863072149639"
+    ],
+    "sudo_key": "5EyFpXybSYon74HVGUZVyvtYxTLy4EuqUxMhgXcmLM2qz1BL"
+  },
+  "people": {
+    "endpoint": "wss://rpc.interweb-it.com/people-paseo",
+    "block": 7759733,
+    "hash": "0x680720a3c7d8c04d1ee81f0c62ac21acdf772446b7148862c20f712012027791",
+    "spec_name": "people-paseo",
+    "spec_version": 2005004,
+    "lite_people": {
+      "count": 604,
+      "by_method": {
+        "UniqueDevice(5HECKTpBe95rgbptG812Gh61VH3pjDfhgtE6xq5mHvRSUSo3)": 604
+      }
+    },
+    "full_people": 41,
+    "dummy_dim_people": 41,
+    "attestation_allowances": [
+      {
+        "attester": "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUqRLF",
+        "allowance": 50
+      },
+      {
+        "attester": "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUqAsg",
+        "allowance": 100
+      },
+      {
+        "attester": "5HECKTpBe95rgbptG812Gh61VH3pjDfhgtE6xq5mHvRSUSo3",
+        "allowance": 999114
+      },
+      {
+        "attester": "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUqkPb",
+        "allowance": 25
+      }
+    ],
+    "onboarding_size": [
+      {
+        "collection": "pop:polkadot.network/people     ",
+        "size": 1
+      },
+      {
+        "collection": "pop:polkadot.network/people-lite",
+        "size": 1
+      }
+    ],
+    "ring_roots": [
+      {
+        "collection": "pop:polkadot.network/people     ",
+        "ring": 0,
+        "revision": 1
+      },
+      {
+        "collection": "pop:polkadot.network/people-lite",
+        "ring": 0,
+        "revision": 254
+      },
+      {
+        "collection": "pop:polkadot.network/people-lite",
+        "ring": 2,
+        "revision": 171
+      },
+      {
+        "collection": "pop:polkadot.network/people-lite",
+        "ring": 1,
+        "revision": 236
+      },
+      {
+        "collection": "pop:polkadot.network/people-lite",
+        "ring": 3,
+        "revision": 57
+      }
+    ],
+    "ring_keys": {
+      "pop:polkadot.network/people#0": 41,
+      "pop:polkadot.network/people-lite#0": 255,
+      "pop:polkadot.network/people-lite#2": 255,
+      "pop:polkadot.network/people-lite#1": 255,
+      "pop:polkadot.network/people-lite#3": 121
+    },
+    "parameter_overrides": []
+  },
+  "polkadot_asset_hub": {
+    "endpoint": "wss://asset-hub-polkadot-rpc.n.dwellir.com",
+    "block": 21860550,
+    "hash": "0x853607446ca17a2181cdd5e3f37b3924868aba832d5f8a78837b0c28c9dff471",
+    "spec_name": "statemint",
+    "spec_version": 2005000,
+    "dotusd": {
+      "details": {
+        "owner": "12Sg2E9vYxvGsknGKRSXserzHWTXfNej8jqAXjp499RT6Sit",
+        "issuer": "12Sg2E9vYxvGsknGKRSXserzHWTXfNej8jqAXjp499RT6Sit",
+        "admin": "12Sg2E9vYxvGsknGKRSXserzHWTXfNej8jqAXjp499RT6Sit",
+        "freezer": "12Sg2E9vYxvGsknGKRSXserzHWTXfNej8jqAXjp499RT6Sit",
+        "supply": "2771778266710",
+        "deposit": "0",
+        "min_balance": "10000",
+        "is_sufficient": true,
+        "accounts": 45,
+        "sufficients": 45,
+        "approvals": 0,
+        "status": {
+          "type": "Live"
+        }
+      },
+      "metadata": {
+        "deposit": "0",
+        "name": "dotUSD",
+        "symbol": "dotUSD",
+        "decimals": 6,
+        "is_frozen": false
+      }
+    },
+    "psm_external_assets": [
+      {
+        "key": [
+          {
+            "parents": 0,
+            "interior": {
+              "type": "X2",
+              "value": [
+                {
+                  "type": "PalletInstance",
+                  "value": 50
+                },
+                {
+                  "type": "GeneralIndex",
+                  "value": "7873"
+                }
+              ]
+            }
+          },
+          {
+            "parents": 0,
+            "interior": {
+              "type": "X2",
+              "value": [
+                {
+                  "type": "PalletInstance",
+                  "value": 50
+                },
+                {
+                  "type": "GeneralIndex",
+                  "value": "1984"
+                }
+              ]
+            }
+          }
+        ],
+        "value": {
+          "status": {
+            "type": "AllEnabled"
+          },
+          "decimals": 6
+        }
+      }
+    ],
+    "members_subscriber": {
+      "subscription": {
+        "type": "Inactive"
+      },
+      "ring_roots": 0
+    },
+    "alias_accounts": 0
+  }
+}
