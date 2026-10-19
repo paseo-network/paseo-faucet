@@ -1,0 +1,243 @@
+{
+  "spike": "One-off run of drip against the real IPersonhood precompile on a chopsticks fork of Paseo Asset Hub. It is not reproducible from this repository: the proofs come from a tool built on the verifiable crate, and the ring roots were written into the fork's storage.",
+  "generator": {
+    "crate": "verifiable",
+    "version": "0.3.0",
+    "pinnedBy": "paseo-network/runtimes v2.5.4-parachains Cargo.lock"
+  },
+  "rootInjection": "one-member rings written into MembersSubscriber.RingRoots with dev_setStorage",
+  "signer": "Alice, paying fees in PAS",
+  "notCovered": [
+    "a proof produced by a host (TrUAPI createAccountProof)",
+    "ring roots arriving from People, multi-member rings and superseded revisions",
+    "a signer paying in PGAS",
+    "destinations other than Asset Hub"
+  ],
+  "fork": {
+    "chain": "asset-hub-paseo",
+    "specVersion": 2005004,
+    "forkedAt": 14569387,
+    "endpoints": [
+      "wss://asset-hub-paseo-rpc.n.dwellir.com",
+      "wss://sys.turboflakes.io/asset-hub-paseo"
+    ]
+  },
+  "contract": {
+    "name": "PaseoFaucet",
+    "compiler": "0.8.34+commit.80d5c536",
+    "bytecodeKeccak": "0x1d01c73666ec742ca98d911d5ce72568bc1adf5a0b4d14409f564cab054d0f55",
+    "address": "0x460ffca3b5f97af7f425760d1551194d063b86a4",
+    "productId": "faucet.dot",
+    "epochSeconds": "300"
+  },
+  "setup": {
+    "tiers": {
+      "lite": {
+        "enabled": true,
+        "pas": "50000000000",
+        "pusd": "5000000"
+      },
+      "full": {
+        "enabled": true,
+        "pas": "100000000000",
+        "pusd": "10000000"
+      }
+    },
+    "maxDripsPerEpoch": 10,
+    "destination": {
+      "id": 1000,
+      "enabled": true,
+      "pasTransfer": 1,
+      "pusdTransfer": 1,
+      "remoteFee": "0",
+      "maxDeliveryFee": "0",
+      "minPas": "100000000",
+      "minPusd": "10"
+    },
+    "funded": {
+      "pas": "1000000000000",
+      "pusd": "100000000"
+    }
+  },
+  "epoch": {
+    "epoch": "5974217",
+    "context": "0x432bbfd7578004ebc4c2f226bc97bf6773374abc52e4a2c9f66aede1ee0b278d",
+    "message": "0x706173656f2d6661756365743a7631460ffca3b5f97af7f425760d1551194d063b86a400000000190f1b4100000000005b28c9000003e813cd377201072298d1a6fe70e0d7b06e636e2f805b0f1ed22d124ee23cce7269",
+    "messageBytes": 87,
+    "chainId": "420420417"
+  },
+  "proofs": {
+    "encodedBytes": 787,
+    "compactPrefix": "0x450c",
+    "rings": [
+      {
+        "collection": "pop:polkadot.network/people-lite",
+        "expectedStatus": 1,
+        "ringIndex": 1000,
+        "revision": 1,
+        "members": 1,
+        "alias": "0xdf80c16ce4763e90a25b48e43ffcdba1710a4602550bf3d51e06dbab1b81f0d5"
+      },
+      {
+        "collection": "pop:polkadot.network/people",
+        "expectedStatus": 2,
+        "ringIndex": 1000,
+        "revision": 1,
+        "members": 1,
+        "alias": "0xb14580913c74c8fb335a38dcc1ea77b16d8aba6f7cfdea59ab236b19d89d5328"
+      }
+    ],
+    "rawBytes": 785
+  },
+  "precompileAlone": {
+    "validProof": {
+      "verified": true,
+      "weight": {
+        "refTime": 20089078000,
+        "proofSize": 4470
+      }
+    },
+    "proofForAnotherMessage": {
+      "verified": false,
+      "weight": {
+        "refTime": 20089078000,
+        "proofSize": 4470
+      }
+    }
+  },
+  "cases": [
+    {
+      "case": "proof for another recipient",
+      "ok": false,
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21070241717",
+        "proof_size": "162406"
+      }
+    },
+    {
+      "case": "wrong revision",
+      "ok": false,
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21070241717",
+        "proof_size": "162406"
+      }
+    },
+    {
+      "case": "raw proof without the compact prefix",
+      "ok": false,
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21070241297",
+        "proof_size": "162406"
+      }
+    },
+    {
+      "case": "wrong ring index",
+      "ok": false,
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21070241717",
+        "proof_size": "162406"
+      }
+    },
+    {
+      "case": "another person's alias",
+      "ok": false,
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21070241717",
+        "proof_size": "162406"
+      }
+    },
+    {
+      "case": "lite proof for the full tier",
+      "ok": false,
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21070241717",
+        "proof_size": "162406"
+      }
+    },
+    {
+      "case": "state after the rejected claims",
+      "hasClaimed": false,
+      "dripsInEpoch": 0,
+      "balancesUnchanged": true
+    },
+    {
+      "case": "valid lite claim, first in the epoch",
+      "ok": true,
+      "dripped": {
+        "epoch": "5974217",
+        "destinationId": 1000,
+        "recipient": "0x13cd377201072298d1a6fe70e0d7b06e636e2f805b0f1ed22d124ee23cce7269",
+        "tier": 1,
+        "contextAlias": "0xdf80c16ce4763e90a25b48e43ffcdba1710a4602550bf3d51e06dbab1b81f0d5",
+        "pas": "50000000000",
+        "pusd": "5000000"
+      },
+      "recipientCredited": {
+        "pas": "50000000000",
+        "pusd": "5000000"
+      },
+      "contractDebited": {
+        "pas": "50000000000",
+        "pusd": "5000000"
+      },
+      "trapped": 0,
+      "dryRunWeight": {
+        "ref_time": "24799871624",
+        "proof_size": "238759"
+      },
+      "includedRefTime": "25923767624",
+      "fee": "84240636",
+      "storageDeposit": "52800000",
+      "storageDepositHeld": {
+        "reason": "Revive StorageDepositReserve",
+        "amount": "52800000"
+      },
+      "xcmUsed": {
+        "ref_time": "2958132000",
+        "proof_size": "14958"
+      }
+    },
+    {
+      "case": "same proof again",
+      "ok": false,
+      "revert": "AlreadyClaimed"
+    },
+    {
+      "case": "valid full claim, second in the epoch",
+      "ok": true,
+      "dripped": {
+        "epoch": "5974217",
+        "destinationId": 1000,
+        "recipient": "0xbc63a16d9075223d0f0b2143cae5ae0b116c4b33ce67507f8c1882ecf39f8e7c",
+        "tier": 2,
+        "contextAlias": "0xb14580913c74c8fb335a38dcc1ea77b16d8aba6f7cfdea59ab236b19d89d5328",
+        "pas": "100000000000",
+        "pusd": "10000000"
+      },
+      "dryRunWeight": {
+        "ref_time": "24799882792",
+        "proof_size": "238791"
+      },
+      "storageDeposit": "26400000"
+    },
+    {
+      "case": "previous epoch's proof in the next epoch",
+      "ok": false,
+      "revert": "InvalidProof"
+    },
+    {
+      "case": "new proof in the next epoch",
+      "ok": true,
+      "epoch": "5974218",
+      "alias": "0x3b33c18908de420e47e9a82a21d37fb766f43846789a21e345052b98bc24380f",
+      "aliasChanged": true,
+      "storageDeposit": "52800000"
+    }
+  ]
+}

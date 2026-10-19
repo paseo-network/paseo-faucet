@@ -1,0 +1,547 @@
+{
+  "chains": {
+    "assetHub": {
+      "paraId": 1000,
+      "specName": "asset-hub-paseo",
+      "specVersion": 2005004,
+      "forkedAt": 14641242,
+      "endpoints": [
+        "wss://asset-hub-paseo-rpc.n.dwellir.com",
+        "wss://sys.turboflakes.io/asset-hub-paseo"
+      ],
+      "existentialDeposit": "100000000"
+    },
+    "people": {
+      "paraId": 1004,
+      "specName": "people-paseo",
+      "specVersion": 2005004,
+      "forkedAt": 7912633,
+      "endpoints": [
+        "wss://rpc.interweb-it.com/people-paseo",
+        "wss://people-paseo.gatotech.network",
+        "wss://people-paseo.rotko.net"
+      ],
+      "existentialDeposit": "1000000000"
+    }
+  },
+  "liveRelay": {
+    "endpoint": "wss://paseo-rpc.n.dwellir.com",
+    "specName": "paseo",
+    "specVersion": 2003001,
+    "block": 1563575,
+    "paraLifecycles": {
+      "1000": "Parathread",
+      "1002": "not registered",
+      "1004": "Parathread",
+      "1005": "not registered",
+      "1010": "Parathread",
+      "1500": "Parathread",
+      "1501": "Parathread",
+      "1502": "Parathread",
+      "2030": "not registered",
+      "2034": "not registered",
+      "2043": "not registered",
+      "2086": "not registered",
+      "2281": "not registered",
+      "3345": "Parathread",
+      "3369": "not registered",
+      "3377": "Parathread",
+      "4009": "Parathread",
+      "4683": "not registered",
+      "5118": "not registered",
+      "5140": "not registered",
+      "5150": "not registered",
+      "5160": "not registered",
+      "5167": "not registered",
+      "5168": "not registered"
+    }
+  },
+  "assetHubHrmpEgress": [
+    1002,
+    1004,
+    1005,
+    1010,
+    1500,
+    1501,
+    1502,
+    2030,
+    2034,
+    2043,
+    2086,
+    2281,
+    3345,
+    3369,
+    3377,
+    4009,
+    4683,
+    5118,
+    5140,
+    5150,
+    5160,
+    5167,
+    5168
+  ],
+  "harness": {
+    "productId": "faucet.dot",
+    "epochSeconds": "86400",
+    "address": "0xa90e3809f2e2a21dda93918a45eab1b8d0afee69",
+    "account": "5FtNB29Z6bnhXa7WHRqHZSnjL9bkB6p4iT3kjT4BjhWhyVQa",
+    "compiler": "0.8.34+commit.80d5c536",
+    "bytecodeKeccak": "0x5a07869cb38ae44c529af9d330ed87e0051288bd53153765a66cc5e3f15fa6c7"
+  },
+  "formats": {
+    "contextFor": {
+      "0": "0x31c1b89cf59d9a9e3feeb55781674e2608785c7743d990f1eabc84f2c185e202",
+      "1": "0x2e49b0091ac03891906d1ce9354c1287f6bac0a594b95de162a92f10e0703da1",
+      "20743": "0x0d15aca61c1575803eaa4d8fc1fff601faa1ae33fd4da030d520c969b639c147"
+    },
+    "currentEpoch": "20745",
+    "messageFor": {
+      "epoch": "20745",
+      "destination": 1004,
+      "recipient": "0x7593f8c89d5d26782de39943a2d445135ecc2d92d3a5739ebfbd44d1a77fabad",
+      "message": "0x706173656f2d6661756365743a7631a90e3809f2e2a21dda93918a45eab1b8d0afee6900000000190f1b410000000000005109000003ec7593f8c89d5d26782de39943a2d445135ecc2d92d3a5739ebfbd44d1a77fabad",
+      "length": 87,
+      "chainId": "420420417"
+    },
+    "balancesView": {
+      "pas": "10000000000000",
+      "pusd": "1000000000",
+      "systemFree": "10000100000000",
+      "note": "balances() reports free PAS minus the existential deposit"
+    }
+  },
+  "dripWithEmptyProof": [
+    {
+      "tier": 1,
+      "proof": "0x00",
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21069930161",
+        "proof_size": "162810"
+      }
+    },
+    {
+      "tier": 2,
+      "proof": "0x00",
+      "revert": "InvalidProof",
+      "weight": {
+        "ref_time": "21069930161",
+        "proof_size": "162810"
+      }
+    }
+  ],
+  "shapesOnly": [
+    {
+      "id": 2030,
+      "enabled": false,
+      "pasTransfer": 3,
+      "pusdTransfer": 3,
+      "remoteFee": "100000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "1100000000",
+      "minPusd": "10000",
+      "xcmVersion": 5,
+      "localDryRun": "ok"
+    },
+    {
+      "id": 2034,
+      "enabled": false,
+      "pasTransfer": 3,
+      "pusdTransfer": 2,
+      "remoteFee": "100000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "1100000000",
+      "minPusd": "10000",
+      "xcmVersion": null,
+      "localDryRun": "PayoutFailed"
+    },
+    {
+      "id": 0,
+      "enabled": false,
+      "pasTransfer": 2,
+      "pusdTransfer": 0,
+      "remoteFee": "100000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "1100000000",
+      "minPusd": "0",
+      "xcmVersion": 5,
+      "localDryRun": "ok"
+    }
+  ],
+  "sp02": {
+    "cases": [
+      {
+        "recipient": "mapped",
+        "account": "0xaad911c18bcfa6b8dc538d4746dc6ac48248250258fdd9c53f5fe09f43af05ff",
+        "amount": {
+          "pas": "250000000000",
+          "pusd": "25000000"
+        },
+        "mapped": true,
+        "existed": true,
+        "balanceAfter": {
+          "pas": "260000000000",
+          "pusd": "25000000"
+        },
+        "weight": {
+          "ref_time": "3591986157",
+          "proof_size": "110655"
+        },
+        "storageDeposit": "0",
+        "txFee": "26345066",
+        "xcmUsed": {
+          "ref_time": "2958132000",
+          "proof_size": "14958"
+        }
+      },
+      {
+        "recipient": "unmapped",
+        "account": "0x98dfe27ea16e8310f7cfcfbad39db533c2158736335023b9006475633b585e27",
+        "amount": {
+          "pas": "250000000000",
+          "pusd": "25000000"
+        },
+        "mapped": false,
+        "existed": true,
+        "balanceAfter": {
+          "pas": "31519873910439",
+          "pusd": "15895899996949741688808111"
+        },
+        "weight": {
+          "ref_time": "3591986157",
+          "proof_size": "110655"
+        },
+        "storageDeposit": "0",
+        "txFee": "26345066",
+        "xcmUsed": {
+          "ref_time": "2958132000",
+          "proof_size": "14958"
+        }
+      },
+      {
+        "recipient": "new",
+        "account": "0x18e23fe105577bded9f6abe6e0a420ed524474abeadd37ceac04ca9854a9a052",
+        "amount": {
+          "pas": "250000000000",
+          "pusd": "25000000"
+        },
+        "mapped": false,
+        "existed": false,
+        "balanceAfter": {
+          "pas": "250000000000",
+          "pusd": "25000000"
+        },
+        "weight": {
+          "ref_time": "3591986157",
+          "proof_size": "110655"
+        },
+        "storageDeposit": "0",
+        "txFee": "26345066",
+        "xcmUsed": {
+          "ref_time": "2958132000",
+          "proof_size": "14958"
+        }
+      },
+      {
+        "recipient": "0xEE",
+        "account": "0x1e4fcf4588b54ab45248b0b35b28bba0bab28b8feeeeeeeeeeeeeeeeeeeeeeee",
+        "amount": {
+          "pas": "250000000000",
+          "pusd": "25000000"
+        },
+        "mapped": false,
+        "existed": false,
+        "balanceAfter": {
+          "pas": "250000000000",
+          "pusd": "25000000"
+        },
+        "evmView": {
+          "address": "0x1e4fcf4588b54ab45248b0b35b28bba0bab28b8f",
+          "balanceWei": "24990000000000000000",
+          "pusdBalanceOf": "25000000"
+        },
+        "weight": {
+          "ref_time": "3591986157",
+          "proof_size": "110655"
+        },
+        "storageDeposit": "0",
+        "txFee": "26345066",
+        "xcmUsed": {
+          "ref_time": "2958132000",
+          "proof_size": "14958"
+        }
+      },
+      {
+        "recipient": "new, minimum drip",
+        "account": "0x5da576d2fa0ebd7adabd291a7494a660574543871690389af3fd283543df5378",
+        "amount": {
+          "pas": "100000000",
+          "pusd": "10"
+        },
+        "mapped": false,
+        "existed": false,
+        "balanceAfter": {
+          "pas": "100000000",
+          "pusd": "10"
+        },
+        "weight": {
+          "ref_time": "3582767849",
+          "proof_size": "110655"
+        },
+        "storageDeposit": "0",
+        "txFee": "26345066",
+        "xcmUsed": {
+          "ref_time": "2958132000",
+          "proof_size": "14958"
+        }
+      }
+    ],
+    "forcedFailure": {
+      "recipient": "0xee21e96209141aca777fe7464ba39a5eb7578412e55474db683ea3109a447c89",
+      "amount": {
+        "pas": "99999999",
+        "pusd": "0"
+      },
+      "revert": "PayoutFailed",
+      "dispatchError": {
+        "type": "Module",
+        "value": {
+          "type": "Revive",
+          "value": {
+            "type": "ContractReverted"
+          }
+        }
+      },
+      "faucetUnchanged": true,
+      "trapped": 0,
+      "weight": {
+        "ref_time": "2082647731",
+        "proof_size": "103176"
+      },
+      "storageDeposit": "0",
+      "txFee": "25685605"
+    }
+  },
+  "sp04": [
+    {
+      "destination": 1004,
+      "chain": "people",
+      "cases": [
+        {
+          "case": "drip",
+          "recipient": "0xbb1086c7f4bd07d17e74f9e1ef9cca41520489bb8c8b57b14828eefe9561560e",
+          "sent": {
+            "pas": "250000000000",
+            "pusd": "25000000"
+          },
+          "creditedPas": "249996831873",
+          "creditedPusd": "25000000",
+          "deliveryFee": "306150000",
+          "executionFee": "3168127",
+          "destinationWeightUsed": {
+            "ref_time": "339188000",
+            "proof_size": "3593"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "5724176633",
+            "proof_size": "128412"
+          },
+          "storageDeposit": "0",
+          "txFee": "27960789",
+          "xcmUsed": {
+            "ref_time": "5005332000",
+            "proof_size": "32715"
+          }
+        },
+        {
+          "case": "minimum drip",
+          "recipient": "0x16beed46c1810a19ce9bc67c3d86d517cfd2034200a5963aa98a5ea984fb4b86",
+          "sent": {
+            "pas": "1100000000",
+            "pusd": "10000"
+          },
+          "creditedPas": "1096831873",
+          "creditedPusd": "10000",
+          "deliveryFee": "305950000",
+          "executionFee": "3168127",
+          "destinationWeightUsed": {
+            "ref_time": "339188000",
+            "proof_size": "3593"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "5711309975",
+            "proof_size": "128412"
+          },
+          "storageDeposit": "0",
+          "txFee": "27960789",
+          "xcmUsed": {
+            "ref_time": "5005332000",
+            "proof_size": "32715"
+          }
+        }
+      ],
+      "deliveryFeeBound": {
+        "deliveryFee": "306150000",
+        "atTheFee": "ok",
+        "belowTheFee": "PayoutFailed"
+      }
+    }
+  ],
+  "launchEntries": [
+    {
+      "chain": "assetHub",
+      "id": 1000,
+      "enabled": true,
+      "pasTransfer": 1,
+      "pusdTransfer": 1,
+      "remoteFee": "0",
+      "maxDeliveryFee": "0",
+      "minPas": "100000000",
+      "minPusd": "10",
+      "existentialDeposit": "100000000"
+    },
+    {
+      "chain": "people",
+      "id": 1004,
+      "enabled": true,
+      "pasTransfer": 2,
+      "pusdTransfer": 2,
+      "remoteFee": "100000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "1100000000",
+      "minPusd": "10000",
+      "existentialDeposit": "1000000000",
+      "xcmVersion": 5,
+      "maxExecutionFee": "3168127",
+      "remoteFeeMargin": "31",
+      "deliveryFee": "306150000",
+      "deliveryFeeMargin": "16"
+    }
+  ],
+  "programs": [
+    {
+      "case": "shape only, destination 2030",
+      "destination": 2030,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100b91f010100040100000284d7170008010004010000070063332f3a010004000204320576c8eb0b0002e1f50508140d010208000101000bde201867630c9b4e4ab81204d8200c77fb1e1da14ce17d2d7475f9e3610ebe",
+      "weight": {
+        "refTime": "5005332000",
+        "proofSize": "32715"
+      }
+    },
+    {
+      "case": "shape only, destination 2034",
+      "destination": 2034,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100c91f010100040100000284d7170008010004010000070063332f3a000004000204320576c8eb0b0002e1f50508140d010208000101008fcbea6db34a887d08302837422ba973d6ee936465efad33c0f2d8038f9ad913",
+      "weight": {
+        "refTime": "5005332000",
+        "proofSize": "32715"
+      }
+    },
+    {
+      "case": "shape only, destination 0",
+      "destination": 0,
+      "pas": "250000000000",
+      "pusd": "0",
+      "program": "0x050c000401000007004429353a2b01310100010000040100000284d7170004000004010000070063332f3a08140d0102040001010042c2d1db790aa3a79dcaafcbaa3e11147d8d616e756b28460c380fe01312f246",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "Asset Hub, mapped",
+      "destination": 1000,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d01020800010100aad911c18bcfa6b8dc538d4746dc6ac48248250258fdd9c53f5fe09f43af05ff",
+      "weight": {
+        "refTime": "2958132000",
+        "proofSize": "14958"
+      }
+    },
+    {
+      "case": "Asset Hub, unmapped",
+      "destination": 1000,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d0102080001010098dfe27ea16e8310f7cfcfbad39db533c2158736335023b9006475633b585e27",
+      "weight": {
+        "refTime": "2958132000",
+        "proofSize": "14958"
+      }
+    },
+    {
+      "case": "Asset Hub, new",
+      "destination": 1000,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d0102080001010018e23fe105577bded9f6abe6e0a420ed524474abeadd37ceac04ca9854a9a052",
+      "weight": {
+        "refTime": "2958132000",
+        "proofSize": "14958"
+      }
+    },
+    {
+      "case": "Asset Hub, 0xEE",
+      "destination": 1000,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d010208000101001e4fcf4588b54ab45248b0b35b28bba0bab28b8feeeeeeeeeeeeeeeeeeeeeeee",
+      "weight": {
+        "refTime": "2958132000",
+        "proofSize": "14958"
+      }
+    },
+    {
+      "case": "Asset Hub, new, minimum drip",
+      "destination": 1000,
+      "pas": "100000000",
+      "pusd": "10",
+      "program": "0x05080008000204320576c8eb0b00280100000284d7170d010208000101005da576d2fa0ebd7adabd291a7494a660574543871690389af3fd283543df5378",
+      "weight": {
+        "refTime": "2958132000",
+        "proofSize": "14958"
+      }
+    },
+    {
+      "case": "Asset Hub, forced failure",
+      "destination": 1000,
+      "pas": "99999999",
+      "pusd": "0",
+      "program": "0x05080004010000fe83d7170d01020400010100ee21e96209141aca777fe7464ba39a5eb7578412e55474db683ea3109a447c89",
+      "weight": {
+        "refTime": "1479066000",
+        "proofSize": "7479"
+      }
+    },
+    {
+      "case": "people, drip",
+      "destination": 1004,
+      "pas": "250000000000",
+      "pusd": "25000000",
+      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100b10f010000040100000284d7170008000004010000070063332f3a000004000204320576c8eb0b0002e1f50508140d01020800010100bb1086c7f4bd07d17e74f9e1ef9cca41520489bb8c8b57b14828eefe9561560e",
+      "weight": {
+        "refTime": "5005332000",
+        "proofSize": "32715"
+      }
+    },
+    {
+      "case": "people, minimum drip",
+      "destination": 1004,
+      "pas": "1100000000",
+      "pusd": "10000",
+      "program": "0x050c0008000204320576c8eb0b00419c0100000300ab90412b0131010100b10f010000040100000284d717000800000401000002286bee000004000204320576c8eb0b00419c08140d0102080001010016beed46c1810a19ce9bc67c3d86d517cfd2034200a5963aa98a5ea984fb4b86",
+      "weight": {
+        "refTime": "5005332000",
+        "proofSize": "32715"
+      }
+    }
+  ]
+}

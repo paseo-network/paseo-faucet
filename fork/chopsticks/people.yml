@@ -1,0 +1,10 @@
+endpoint:
+  - wss://rpc.interweb-it.com/people-paseo
+  - wss://people-paseo.gatotech.network
+  - wss://people-paseo.rotko.net
+# Set PEOPLE_BLOCK to pin the fork; unset forks the latest block.
+block: ${env.PEOPLE_BLOCK}
+port: 8001
+mock-signature-host: true
+# The runtime imports statement-store host functions that chopsticks does not provide.
+allow-unresolved-imports: true
