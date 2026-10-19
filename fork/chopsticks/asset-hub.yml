@@ -1,0 +1,23 @@
+endpoint:
+  - wss://asset-hub-paseo-rpc.n.dwellir.com
+  - wss://sys.turboflakes.io/asset-hub-paseo
+# Set ASSET_HUB_BLOCK to pin the fork; unset forks the latest block.
+block: ${env.ASSET_HUB_BLOCK}
+port: 8000
+mock-signature-host: true
+# Each entry replaces the live one, so Alice's nonce restarts at 0.
+import-storage:
+  System:
+    Account:
+      - - - 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+        - providers: 1
+          sufficients: 1
+          data:
+            free: '10000000000000000'
+  Assets:
+    Account:
+      - - - 50000413
+          - 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+        - balance: '1000000000000'
+          status: Liquid
+          reason: Sufficient
