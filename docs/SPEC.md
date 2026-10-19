@@ -69,8 +69,9 @@ allowlist [H1] [T3]. A durable faucet needs the personhood product (`peopl.dot`)
   Bulletin Next (1501) and People Next System (1502) (7.9). The owner appends or removes
   destinations as chains become available or stop accepting transfers; the product reads the
   list from the contract, so no redeploy and no product release is needed.
-- **G8. A shortcut for trusted users.** Accounts the owner or an admin whitelists can request
-  a specific amount without waiting for the next epoch (REQ-19).
+- **G8. A shortcut for trusted users.** Accounts the owner whitelists can request a specific
+  amount without a personhood proof and without waiting for the next epoch, up to a cap the
+  owner sets for each of them (REQ-19).
 
 **Non-goals**
 
@@ -92,10 +93,9 @@ allowlist [H1] [T3]. A durable faucet needs the personhood product (`peopl.dot`)
 | Faucet product | Static bundle at a DotNS name; builds the proof request and the claim | untrusted by the contract; the contract re-derives everything it checks |
 | Product account | The person's per-product account (RFC-0022) that signs the claim and pays in PGAS [T5] | untrusted |
 | Faucet contract | Holds funds, enforces the rules | the trusted code |
-| Owner | Configures tiers and destinations, pauses, withdraws, transfers ownership | trusted (D-08) |
+| Owner | The one origin for privileged calls: configures tiers and destinations, manages the whitelist (REQ-19), pauses, withdraws, transfers ownership | trusted (D-08) |
 | Pauser | Can only pause the faucet or disable a destination | trusted with liveness only (OPT-06) |
-| Admin | Manages the whitelist (REQ-19); whether this is the owner or a separate role is D-15 | trusted with whitelist entries |
-| Whitelisted account | Requests specific amounts without waiting for the next epoch (REQ-19) | trusted up to its limits (D-15) |
+| Whitelisted account | Requests specific amounts without a personhood proof or the epoch limit, up to its cap per epoch (REQ-19) | trusted by the owner up to its cap |
 | Funders | Anyone sending PAS or pUSD to the contract | none needed |
 | pUSD issuer | `5FX9eGJYqJTmjJDQrQpzEjGh7qQHNscW9uL1X17aXkiFN6u1` can mint pUSD [E1] | external, D-06 |
 | Paseo Root (sudo) | Recognises full persons, sets the lite fee, could open alias binding | trusted: on Paseo, sudo can create persons [P7] [R17] |
@@ -126,8 +126,8 @@ The contract's security rests on: the `IPersonhood` precompile and the ring root
 | REQ-15 | The product talks only to the host (chain access, signing, proofs). It makes no calls to any backend and embeds no secret. | G1. |
 | REQ-16 | The contract keeps a destination registry. The owner adds, updates and removes destinations with contract calls; the pauser can disable one. Only enabled destinations are paid. The launch set is Asset Hub (local), People (1004), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502). The built contract registers Asset Hub and People; the other three join after their entries are measured and they pass an arrival test (section 18). | G7. Acceptance: adding a destination makes it appear in the product with no product release; removing or disabling it stops payouts to it. |
 | REQ-17 | A destination entry holds typed fields only (section 9.2). The contract builds the XCM program for a destination from those fields; it never executes XCM bytes supplied by the owner or the caller. | Keeps every possible payout auditable: a destination entry can only move the drip amounts to the recipient on that chain. |
-| REQ-18 | One claim pays the recipient on every enabled destination at once: PAS everywhere, and pUSD where the destination takes it. A leg that cannot be paid (the faucet lacks the asset, the tier amount is below the destination's minimum, the payout fails on Asset Hub) is skipped, and the person receives the rest. | Not built yet: the built contract pays one named destination per claim, all or nothing. Supersedes the all-or-nothing choice of D-12. Open design points are D-16. |
-| REQ-19 | The owner or an admin keeps a whitelist of accounts that can request a specific amount and do not wait for the next epoch. | G8. Not built yet. Open design points are D-15. |
+| REQ-18 | One claim pays the recipient on every enabled destination at once: PAS everywhere, and pUSD where the destination takes it. A leg that cannot be paid (the faucet lacks the asset, the tier amount is below the destination's minimum, the payout fails on Asset Hub) is skipped, and the person receives the rest. | Not built yet: the built contract pays one named destination per claim, all or nothing. Supersedes the all-or-nothing choice of D-12. The proven message no longer names a destination (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; the event reports the destinations that were skipped (D-16). |
+| REQ-19 | The owner keeps a whitelist of accounts. A whitelisted account requests specific PAS and pUSD amounts for a recipient on enabled destinations, without a personhood proof and without the per-person epoch limit; its total per epoch stays within a PAS cap and a pUSD cap the owner sets for it. Adding, changing and removing entries emits events. | G8. Not built yet (D-15). The cap bounds what a leaked whitelisted key can take before the owner removes it; requests stop while the faucet is paused. |
 
 ## 5. Soft requirements
 
@@ -585,6 +585,23 @@ is included as well. The destination is included so a copied proof cannot send t
 same account on another chain. The product signs exactly these bytes; the contract rebuilds
 them.
 
+REQ-18 replaces this format (D-16). A claim then pays every enabled destination, so there is no
+destination to bind, and the domain's version changes so a message in one format can never
+verify as the other:
+
+```
+message = DOMAIN                (15 bytes, ASCII "paseo-faucet:v2")
+       ++ contract address      (20 bytes)
+       ++ chain id              (8 bytes, u64 big-endian)
+       ++ epoch                 (8 bytes, u64 big-endian)
+       ++ recipient             (32 bytes, the AccountId32)
+                                 = 83 bytes
+```
+
+The epoch duplicates what the per-epoch context (9.4) already binds; it stays, for 8 bytes, so
+the binding does not depend on the context choice. The message never travels on chain, since
+the contract rebuilds it, so its length does not affect fees.
+
 ### 9.6 Proof encoding
 
 Hosts return the raw proof (785 bytes for one context); the precompile expects the SCALE
@@ -836,8 +853,6 @@ incident response is still to write.
 | D-07 | Legacy faucet and Matrix bot | keep with lower amounts; retire | keep for non-persons and Matrix until the product covers the main hosts |
 | D-08 | Owner and pauser | multisig composition, pauser key holder | multisig of the Paseo team, with Parity optional; pauser held by the on-call operator |
 | D-10 | Paseo lite registration fee | keep 75 PAS; raise | raise well above any lite drip value |
-| D-15 | Whitelist (REQ-19) | who manages it: the owner, or a separate admin role the owner appoints; whether a whitelisted account also proves personhood; limits per request and per period; which destinations a request may target | to specify before it is built |
-| D-16 | Claim across destinations (REQ-18) | what the proven message (9.5) binds once a claim no longer names a destination; whether a claim with no payable leg reverts, leaving the nullifier unspent; how skipped legs are reported in events | to specify before it is built; the message format change needs the product author's agreement (REQ-11) |
 
 Decided:
 
@@ -845,6 +860,8 @@ Decided:
 |---|---|
 | Launch destinations | Asset Hub, People, Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502); the relay chain is not in the launch set |
 | Coretime and Bridge Hub | not part of the Paseo relay and out of scope |
+| Privileged origin and whitelist (D-15) | the owner is the admin: one origin for every privileged call, destinations and the whitelist included; whitelisted accounts need no personhood proof; each has an owner-set PAS cap and pUSD cap per epoch (REQ-19) |
+| Claim across destinations (D-16) | the proven message binds the `paseo-faucet:v2` domain, the contract, the chain id, the epoch and the recipient, 83 bytes (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; the event reports skipped destinations (REQ-18) |
 | Personhood check (D-02) | `personhoodInfoByProof` (7.1) |
 | Context (D-04) | per epoch (7.3) |
 | Payout path (D-05) | XCM, since SP-02 passed [E6] |
@@ -871,7 +888,7 @@ Spikes (each a throwaway experiment whose result is written back into this spec)
 
 Go / no-go for launch:
 
-- [ ] D-01, D-03, D-06 to D-08, D-10, D-15 and D-16 decided
+- [ ] D-01, D-03, D-06 to D-08 and D-10 decided
 - [ ] REQ-18 and REQ-19 built and verified (section 18)
 - [x] SP-02, and SP-04 for People, passed and folded into sections 7 and 9
 - [ ] SP-01 (host half) and SP-03 passed
@@ -888,11 +905,12 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
 
 **Contract**
 
-1. **One claim pays every enabled destination (REQ-18).** Settle D-16, then change `drip`, the
-   message format (9.5) and its vectors, the events and the fork check. Each leg is skipped
-   rather than reverted when it cannot be paid.
-2. **Whitelist (REQ-19).** Settle D-15, then add the whitelist, its management calls and events,
-   and their tests.
+1. **One claim pays every enabled destination (REQ-18).** Change `drip`, move the message to the
+   83-byte `paseo-faucet:v2` format (9.5) with new vectors, report skipped destinations in the
+   event, and extend the fork check. Each leg is skipped rather than reverted when it cannot be
+   paid; a claim that pays nothing reverts.
+2. **Whitelist (REQ-19).** Add the owner-managed whitelist with a PAS cap and a pUSD cap per
+   account per epoch, the request call, their events and tests.
 3. **Destinations 1500, 1501 and 1502.** Check each is registered on the relay, determine its
    PAS transfer kind and, for Asset Hub Next and People Next System, how they receive pUSD
    (Bulletin Next gets PAS only), measure `remoteFee`, `maxDeliveryFee`, `minPas` and `minPusd`
