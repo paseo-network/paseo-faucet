@@ -285,7 +285,7 @@ pallet-revive on Paseo AH [R5] [R13]:
 | Bytecode | PolkaVM (resolc, Rust) **and** EVM (`AllowEVMBytecode = true`; solc output deploys) |
 | PAS in EVM units | `NativeToEthRatio = 10^8`: 1 planck = 10^8 wei, 1 PAS = 10^18 wei |
 | Address mapping | `AccountId32Mapper`, `AutoMap = true`: accounts created **after** AutoMap are mapped at creation |
-| Storage deposit | `PGasDeposit`: PGAS first, native fallback; 0.2 PAS per item, 0.00001 PAS per byte; only 10% of a PGAS deposit is refunded on release |
+| Storage deposit | `PGasDeposit`: PGAS first, native fallback; 0.2 PAS per item, but 0.002 PAS per contract storage slot (a child-trie item), plus 0.00001 PAS per byte [R23], so one slot (64 bytes of key and value) costs 0.00264 PAS [E7]; only 10% of a PGAS deposit is refunded on release |
 | eth-rpc / explorers | `https://eth-rpc-testnet.polkadot.io`; `https://blockscout-testnet.polkadot.io`, `https://assethub-paseo.subscan.io` |
 
 Precompiles relevant to a faucet:
