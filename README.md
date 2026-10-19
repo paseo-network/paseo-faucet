@@ -708,6 +708,19 @@ with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
    [SPEC section 15](docs/SPEC.md#15-dependencies-and-asks); a canary deployment with a claim
    that arrives on every enabled destination; the external review (D-13); then the production
    deployment and an incident-response runbook.
+9. **Hardening** from an abuse review ([SPEC section 12](docs/SPEC.md#12-security-and-risks),
+   K-19 to K-27), folded into the work above as it is built:
+   - a cap per tier, so fake lite persons cannot fill the epoch cap for full persons too;
+   - a payout record per destination, so a claim whose legs were skipped can collect them later
+     in the same epoch;
+   - delivery fees counted against a whitelisted account's cap;
+   - a warning, or an Asset Hub-only payout, for `0xEE` recipients;
+   - hosts enforcing the `peopl.dot` allowlist, and custody of the product's name and publishing
+     key.
+
+No caller can change the configuration, take funds or redirect another person's drip. What
+remains open is denial of service and proofs obtained through other products; the review
+explains each case and its fix.
 
 ## Open decisions
 

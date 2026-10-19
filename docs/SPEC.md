@@ -783,6 +783,20 @@ only while the faucet holds the drip plus the destination's `maxDeliveryFee`.
 | K-16 | A destination rejects the transfer after the claim succeeded on Asset Hub | the person loses that epoch's drip; funds stuck on the destination | relay registration check and arrival test before enabling (8.6, SP-04); `minPas` covers ED and fee; front-end dry-run on the destination (OPT-12); arrival monitoring; disable on failures |
 | K-17 | A destination's runtime upgrade changes what it accepts (fee asset, trust, ED) | arrivals fail | monitor destination upgrades; pauser disables the destination; retest before re-enabling |
 | K-18 | The owner registers a wrong destination entry | drips sent where they cannot arrive | typed entries only (REQ-17); the arrival test is part of the add procedure; events make every change visible |
+| K-19 | Another product obtains a proof in the faucet's context: Android shows only a one-time prompt for another product's context and does not enforce the RFC-0024 allowlist [H1] | if the person approves, that person's drip for the epoch goes to a recipient the other product chose | hosts enforce the allowlist, so only products `peopl.dot` lists can use the person key, and refuse other products' contexts (A-1, A-2); until then the loss is one drip per person who approves |
+| K-20 | The faucet product or its DotNS name is compromised (a malicious release, a name takeover) | the product asks for proofs naming the attacker's recipient, so everyone who uses it loses that epoch's drip | custody of the DotNS name and of the publishing key (D-01), reviewed releases; the drip bounds the loss per person |
+| K-21 | Fake lite persons, at 75 PAS each [R15], fill the epoch cap, which both tiers share | the faucet is closed to everyone for the rest of the epoch, full persons included, and each fake person earns its drip | a cap per tier (18), D-10 fee raise, a cap sized above the population |
+| K-22 | Anyone floods a destination's XCM queue from Asset Hub so that its delivery fee rises above `maxDeliveryFee` | built contract: claims to that destination revert `PayoutFailed`, with the nullifier unspent, until the queue clears; with REQ-18, that leg is skipped and the claim is spent | the attacker pays the same rising fee; `DeliveryFeeFactor` alert (14); the pauser disables the destination; a payout record per destination (18) |
+| K-23 | Paid registrations into the lite ring that is still filling rebuild it again and again | Asset Hub keeps at most 3 revisions per ring [R3], so proofs made against an older revision fail `InvalidProof` for that ring's members | the product retries with a fresh proof (8.3); the attacker pays 75 PAS per registration; `InvalidProof` rate alert (14) |
+| K-24 | A leaked whitelisted key sends many minimum-size requests to remote destinations (REQ-19) | each request costs the faucet a delivery fee that the account's cap does not count | count each request's `maxDeliveryFee` against the cap (18); the owner removes the key |
+| K-25 | REQ-18 makes one claim pay every enabled destination | farming (K-03) pays off sooner: a claim's outflow is the sum over destinations plus a delivery fee per remote one | the K-03 levers; a cap per tier (18); amounts per destination if needed |
+| K-26 | A pending claim is copied and submitted first, with the same recipient | the person's own transaction fails `AlreadyClaimed` and its fee is lost; the drip still reaches the recipient | accepted |
+| K-27 | With REQ-18 an Ethereum-derived (`0xEE`) recipient is paid on every chain, but nobody can sign for it on chains without an EVM | the claimant's own funds are unusable there | the product warns; optionally the contract pays such a recipient on Asset Hub only (18) |
+
+K-19 to K-27 come from an abuse review of the built contract and of REQ-18 and REQ-19. No caller
+can change the configuration, take funds or redirect another person's drip, and nobody claims
+more than once per key, tier and epoch. The open exposures are the denial-of-service and
+proof-acquisition paths above; their fixes are in section 18.
 
 ## 13. Verification plan
 
@@ -937,3 +951,19 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
    every enabled destination.
 10. The external review (D-13), then the production deployment and the rest of the launch
     sequence (14), including an incident-response runbook.
+
+**Hardening** (from risks K-19 to K-27; fold each into the contract or product work above as it
+is built)
+
+11. **A cap per tier** (K-21, K-25). `maxDripsPerEpoch` and `dripsInEpoch` become per tier, so
+    lite claims cannot use up the full tier's slots. This changes REQ-08's single cap.
+12. **A payout record per destination** (K-22), with REQ-18. Record which destinations a claim
+    paid, so a second claim in the same epoch pays only the destinations that were skipped. Each
+    paid destination adds one storage item, about 0.00264 PAS of deposit in PGAS (9.9).
+13. **Delivery fees count against a whitelisted account's cap** (K-24), with REQ-19.
+14. **`0xEE` recipients** (K-27). The product warns; decide whether the contract pays such a
+    recipient on Asset Hub only.
+15. **Host behaviour** (K-19). Hosts enforce the RFC-0024 allowlist and refuse proofs in another
+    product's context; track it with A-1 and A-2.
+16. **Product release process** (K-20). Custody of the DotNS name and the publishing key, and
+    reviewed releases, before launch.
