@@ -688,10 +688,12 @@ with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
 1. **One claim pays every enabled chain** ([REQ-18](docs/SPEC.md#4-requirements)). Today a
    claim names one destination and is all or nothing. Next, one claim per person per epoch pays
    PAS on every enabled destination and pUSD where it is offered. A leg that cannot be paid is
-   skipped, and the person gets the rest. This changes `drip`, the message format and its
-   vectors, the events and the fork check (D-16).
-2. **Whitelist** ([REQ-19](docs/SPEC.md#4-requirements)). Accounts the owner or an admin
-   whitelists can request a specific amount without waiting for the next epoch (D-15).
+   skipped, and the person gets the rest; a claim that pays nothing reverts. The proven message
+   drops the destination and becomes 83 bytes (`paseo-faucet:v2`). This changes `drip`, the
+   message format and its vectors, the events and the fork check (D-16).
+2. **Whitelist** ([REQ-19](docs/SPEC.md#4-requirements)). Accounts the owner whitelists request
+   specific amounts without a personhood proof and without waiting for the next epoch, up to a
+   PAS and a pUSD cap per epoch the owner sets for each (D-15).
 3. **Destinations 1500, 1501 and 1502.** Asset Hub Next and People Next System receive PAS and
    pUSD, Bulletin Next PAS only: determine their transfer kinds, measure their entries on a
    fork, add them to `launch()` and to the fork check, then pass a live arrival test.
@@ -714,14 +716,15 @@ options and recommendations.
 
 - **Open:** D-01 product name, D-03 amounts, epoch length and cap, D-06 pUSD source, D-07 the
   legacy faucet and Matrix bot, D-08 owner multisig and pauser, D-10 the Paseo lite
-  registration fee, D-15 the whitelist's management and limits, D-16 the shape of a claim that
-  pays every destination.
+  registration fee.
 - **Decided:** D-02 `personhoodInfoByProof`, D-04 per-epoch contexts, D-05 XCM payout, D-09
   Solidity to EVM bytecode with Foundry, D-11 one claim per person per epoch in total, D-12 pay
   what is available on every enabled destination (to build, REQ-18), D-13 internal review plus
-  one external review before raising balances. The launch set is Asset Hub, People, Asset Hub
-  Next, Bulletin Next and People Next System; Coretime and Bridge Hub are not part of the Paseo
-  relay and are out of scope.
+  one external review before raising balances, D-15 the owner is the one privileged origin and
+  manages the whitelist (no proof, a cap per account per epoch), D-16 an 83-byte message
+  without a destination and a revert when a claim can pay nothing. The launch set is Asset Hub,
+  People, Asset Hub Next, Bulletin Next and People Next System; Coretime and Bridge Hub are not
+  part of the Paseo relay and are out of scope.
 
 ## Documents
 
