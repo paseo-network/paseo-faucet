@@ -196,7 +196,8 @@ export async function head(chain: Connected): Promise<number> {
   return Number((await chain.client._request<{ number: Hex }, []>('chain_getHeader', [])).number);
 }
 
-const newBlock = (chain: Chain) => chain.client._request<Hex, [{ count: number }]>('dev_newBlock', [{ count: 1 }]);
+export const newBlock = (chain: Chain) =>
+  chain.client._request<Hex, [{ count: number }]>('dev_newBlock', [{ count: 1 }]);
 
 const blockHash = (chain: Chain, block: number) => chain.client._request<Hex, [number]>('chain_getBlockHash', [block]);
 

@@ -2,7 +2,15 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { type Hex, bytesToHex, decodeFunctionData, encodeFunctionData, hexToBytes, keccak256 } from 'viem';
+import {
+  type Hex,
+  bytesToHex,
+  decodeEventLog,
+  decodeFunctionData,
+  encodeFunctionData,
+  hexToBytes,
+  keccak256,
+} from 'viem';
 import {
   ALICE,
   PUSD_ASSET_ID,
@@ -10,6 +18,7 @@ import {
   WEI_PER_PLANCK,
   type CallResult,
   type Chain,
+  type ChainEvent,
   accountHex,
   call,
   constant,
@@ -21,6 +30,7 @@ import {
   head,
   json,
   loadArtifact,
+  newBlock,
   open,
   pas,
   pusd,
@@ -59,6 +69,8 @@ const RELAY_RPC = 'wss://paseo-rpc.n.dwellir.com';
 const FEE_MARGIN = 10n;
 
 const [NONE, LOCAL, TELEPORT, RESERVE] = [0, 1, 2, 3];
+const SKIP = ['None', 'BelowMinimum', 'InsufficientPas', 'PayoutFailed'];
+const LITE = 1;
 
 interface Amount {
   pas: bigint;
@@ -154,6 +166,9 @@ const u256 = (limbs: bigint[]) => limbs.reduceRight((value, limb) => (value << 6
 const be = (value: bigint | number, bytes: number) => BigInt(value).toString(16).padStart(2 * bytes, '0');
 const event = (r: CallResult, pallet: string, name: string) =>
   r.events.find((e) => e.pallet === pallet && e.name === name)?.value;
+const hex = (v: Hex | Uint8Array): Hex => (typeof v === 'string' ? v : bytesToHex(v));
+const fromAssetHub = (e: ChainEvent) =>
+  e.pallet === 'MessageQueue' && e.value?.origin?.type === 'Sibling' && e.value.origin.value === 1000;
 const cost = (r: CallResult) => ({
   weight: r.weight,
   storageDeposit: r.deposit,
@@ -235,18 +250,18 @@ try {
   const epoch = (await read(ah, faucet, abi, 'currentEpoch')) as bigint;
   assert.equal(epoch, (await query(ah, 'Timestamp', 'Now')) / 1000n / EPOCH_SECONDS);
   const someone = newAccount();
-  const message = (await read(ah, faucet, abi, 'messageFor', [epoch, 1004, someone])) as Hex;
-  const domain = Buffer.from('paseo-faucet:v1').toString('hex');
-  const layout = `${domain}${faucet.slice(2)}${be(CHAIN_ID, 8)}${be(epoch, 8)}${be(1004, 4)}${someone.slice(2)}`;
+  const message = (await read(ah, faucet, abi, 'messageFor', [epoch, someone])) as Hex;
+  const domain = Buffer.from('paseo-faucet:v2').toString('hex');
+  const layout = `${domain}${faucet.slice(2)}${be(CHAIN_ID, 8)}${be(epoch, 8)}${someone.slice(2)}`;
   assert.equal(message, `0x${layout}`);
-  assert.equal(hexToBytes(message).length, 87);
+  assert.equal(hexToBytes(message).length, 83);
   const [viewPas, viewPusd] = (await read(ah, faucet, abi, 'balances')) as [bigint, bigint];
   const funded = await holdings(account);
   assert.deepEqual({ pas: viewPas, pusd: viewPusd }, { pas: funded.pas - ahEd, pusd: funded.pusd });
   report.formats = {
     contextFor: Object.fromEntries(CONTEXTS),
     currentEpoch: epoch,
-    messageFor: { epoch, destination: 1004, recipient: someone, message, length: 87, chainId: CHAIN_ID },
+    messageFor: { epoch, recipient: someone, message, length: 83, chainId: CHAIN_ID },
     balancesView: {
       pas: viewPas,
       pusd: viewPusd,
@@ -260,7 +275,7 @@ try {
   await call(ah, faucet, abi, 'setMaxDripsPerEpoch', [1000]);
   const drips = [];
   for (const tier of [1, 2]) {
-    const args = [tier, 1000, newAccount(), '0x00', newAccount(), 0, 0];
+    const args = [tier, newAccount(), '0x00', newAccount(), 0, 0];
     const sim = await simulate(ah, faucet, abi, 'drip', args, { allowRevert: true });
     assert.equal(sim.revert?.errorName, 'InvalidProof');
     drips.push({ tier, proof: '0x00', revert: 'InvalidProof', weight: sim.weight });
@@ -393,8 +408,6 @@ try {
     assert.equal(d.minPusd, (await query(dest, 'Assets', 'Asset', PUSD_ON_PEOPLE)).min_balance);
     const metadata = await query(dest, 'Assets', 'Metadata', PUSD_ON_PEOPLE);
     assert.equal(new TextDecoder().decode(metadata.name), 'Digital Dollar');
-    const fromAssetHub = (e: { pallet: string; value: any }) =>
-      e.pallet === 'MessageQueue' && e.value?.origin?.type === 'Sibling' && e.value.origin.value === 1000;
     const cases = [];
     for (const [label, sent] of [
       ['drip', DRIP],
@@ -466,6 +479,113 @@ try {
   }
   report.sp04 = remote;
   report.launchEntries = launchEntries;
+
+  // 4. REQ-18: one claim pays every enabled destination; a destination whose payout fails reverts alone.
+  const peopleChain = chains.people;
+  const { remoteFee } = people;
+  const faucetEvents = (r: CallResult) =>
+    r.events
+      .filter((e) => e.pallet === 'Revive' && e.name === 'ContractEmitted' && hex(e.value.contract) === faucet)
+      .map((e) => {
+        const log = decodeEventLog({ abi, data: hex(e.value.data), topics: e.value.topics.map(hex) });
+        const args = log.args as Record<string, any>;
+        return log.eventName === 'Dripped'
+          ? { event: 'Dripped', destination: args.destinationId, pas: args.pas, pusd: args.pusd }
+          : { event: log.eventName, destination: args.destinationId, reason: SKIP[args.reason] };
+      });
+  const dripped = (id: number, amount: Amount) => ({ event: 'Dripped', destination: id, ...amount });
+  const paidOn = async (alias: Hex, id: number) =>
+    read(ah, faucet, abi, 'hasClaimed', [await read(ah, faucet, abi, 'currentEpoch'), LITE, alias, id]);
+  const dripsNow = async () =>
+    read(ah, faucet, abi, 'dripsInEpoch', [await read(ah, faucet, abi, 'currentEpoch')]) as Promise<number>;
+  /** Claims for `alias` without a proof; checks what reached each chain and that nothing was trapped. */
+  async function claim(alias: Hex, to: Hex, expected: unknown[], peoplePaid: boolean) {
+    const before = { faucet: await holdings(account), recipient: await holdings(to), drips: await dripsNow() };
+    const ahFrom = await head(ah);
+    const peopleFrom = await head(peopleChain);
+    const res = await call(ah, faucet, abi, 'dripWithoutProof', [LITE, to, alias]);
+    const events = faucetEvents(res);
+    assert.deepEqual(toJson(events), toJson(expected));
+    assert.equal(trappedAssets(await eventsSince(ah, ahFrom)).length, 0);
+    const assetHubPaid = events.some((e) => e.event === 'Dripped' && e.destination === ah.paraId);
+    const received = await holdings(to);
+    const diff = (a: Amount, b: Amount) => ({ pas: a.pas - b.pas, pusd: a.pusd - b.pusd });
+    assert.deepEqual(diff(received, before.recipient), assetHubPaid ? DRIP : { pas: 0n, pusd: 0n });
+    const sent = res.events.filter((e) => e.pallet === 'XcmpQueue' && e.name === 'XcmpMessageSent').length;
+    assert.equal(sent, peoplePaid ? 1 : 0);
+    let arrived;
+    if (peoplePaid) {
+      const peopleEvents = await untilEvent(peopleChain, peopleFrom, fromAssetHub);
+      const processed = peopleEvents.find(fromAssetHub);
+      assert.ok(processed?.name === 'Processed' && processed.value.success, 'People: not processed');
+      assert.equal(trappedAssets(peopleEvents).length, 0);
+      arrived = { pas: await pas(peopleChain, to), pusd: await pusd(peopleChain, to) };
+      assert.equal(arrived.pusd, DRIP.pusd);
+      assert.ok(arrived.pas > DRIP.pas - remoteFee, 'People: credited less than the drip less remoteFee');
+    } else {
+      await newBlock(peopleChain);
+      assert.ok(!(await eventsSince(peopleChain, peopleFrom)).some(fromAssetHub), 'People: a skipped leg arrived');
+    }
+    const spent = diff(before.faucet, await holdings(account));
+    return {
+      events,
+      faucetSpent: spent,
+      assetHubCredited: diff(received, before.recipient),
+      peopleBalance: arrived,
+      dripsInEpoch: { before: before.drips, after: await dripsNow() },
+      weight: res.weight,
+      storageDeposit: res.deposit,
+      txFee: event(res, 'TransactionPayment', 'TransactionFeePaid')?.actual_fee,
+    };
+  }
+
+  const both = newAccount();
+  const aliasBoth = newAccount();
+  const paysBoth = await claim(aliasBoth, both, [dripped(ah.paraId, DRIP), dripped(people.id, DRIP)], true);
+  assert.equal(paysBoth.dripsInEpoch.after, paysBoth.dripsInEpoch.before + 1);
+  assert.equal(paysBoth.faucetSpent.pusd, 2n * DRIP.pusd);
+  assert.ok(paysBoth.faucetSpent.pas - 2n * DRIP.pas <= people.maxDeliveryFee, 'delivery fee above the bound');
+
+  // People's payout reverts on the bound, alone: Asset Hub is paid and People stays claimable.
+  await call(ah, faucet, abi, 'setDestination', [{ ...people, maxDeliveryFee: 1n }]);
+  const skipped = { event: 'DripSkipped', destination: people.id, reason: 'PayoutFailed' };
+  const to = newAccount();
+  const alias = newAccount();
+  const skipsPeople = await claim(alias, to, [dripped(ah.paraId, DRIP), skipped], false);
+  assert.deepEqual(skipsPeople.faucetSpent, DRIP);
+  assert.equal(skipsPeople.dripsInEpoch.after, skipsPeople.dripsInEpoch.before + 1);
+  assert.deepEqual([await paidOn(alias, ah.paraId), await paidOn(alias, people.id)], [true, false]);
+  const allFail = async () => {
+    const sim = await simulate(ah, faucet, abi, 'dripWithoutProof', [LITE, newAccount(), newAccount()], {
+      allowRevert: true,
+    });
+    return sim.revert?.errorName ?? 'ok';
+  };
+  await call(ah, faucet, abi, 'disableDestination', [ah.paraId]);
+  const nothingPaid = await allFail();
+  assert.equal(nothingPaid, 'PayoutFailed');
+  await call(ah, faucet, abi, 'setDestination', [assetHub]);
+  await call(ah, faucet, abi, 'setDestination', [people]);
+
+  const paysSkipped = await claim(alias, to, [dripped(people.id, DRIP)], true);
+  assert.equal(paysSkipped.dripsInEpoch.after, paysSkipped.dripsInEpoch.before);
+  assert.deepEqual([await paidOn(alias, ah.paraId), await paidOn(alias, people.id)], [true, true]);
+  const again = await simulate(ah, faucet, abi, 'dripWithoutProof', [LITE, to, alias], { allowRevert: true });
+  assert.equal(again.revert?.errorName, 'AlreadyClaimed');
+  report.req18 = {
+    tier: LITE,
+    drip: DRIP,
+    paysEveryDestination: { recipient: both, alias: aliasBoth, ...paysBoth },
+    skipsAFailedPayout: {
+      recipient: to,
+      alias,
+      setup: 'People maxDeliveryFee set to 1 plank, below its delivery fee',
+      ...skipsPeople,
+    },
+    nothingPaid: { setup: 'Asset Hub disabled, People maxDeliveryFee 1 plank', revert: nothingPaid },
+    paysTheSkippedDestinationLater: { recipient: to, alias, setup: 'People entry restored', ...paysSkipped },
+    claimAgain: again.revert?.errorName,
+  };
   report.programs = programs;
 } finally {
   await net.close();
