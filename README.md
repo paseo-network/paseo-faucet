@@ -1,4 +1,4 @@
-# Paseo personhood faucet
+# Paseo personhood-based faucet
 
 A contract on Paseo Asset Hub that pays PAS and pUSD (the Paseo counterpart of dotUSD) at most
 once per person, tier, epoch and chain. A person proves membership of People or People Lite
