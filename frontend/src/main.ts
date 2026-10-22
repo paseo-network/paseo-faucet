@@ -52,10 +52,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <details><summary>Why do I need proof of personhood?</summary><p>The faucet limits claims by personhood key instead of wallet address. It checks an anonymous membership proof on chain. Both People and People Lite are supported, with independently configured amounts and quotas.</p></details>
       <details><summary>Which chains are paid?</summary><p>One claim pays every chain the faucet owner has enabled, among Paseo Relay, Asset Hub, People, Bulletin, Asset Hub Next, Bulletin Next and People Next. pUSD is included where the chain supports it. A chain that cannot be paid at that moment is skipped, and you can claim it again later in the same period.</p></details>
       <details><summary>Can I claim without PAS?</summary><p>A supported host can provide PGAS for a product account’s contract transaction and storage deposit. Real zero-PAS claims still need to pass the faucet’s launch checks. Ethereum wallet transactions cannot use this PGAS path.</p></details>
-      <details><summary>Why haven’t my tokens arrived?</summary><p>Claims on Asset Hub pay locally. Other chains receive an asynchronous XCM transfer, so confirmation on Asset Hub means the transfer was dispatched. Check the destination chain’s explorer for arrival. The destination’s execution fee is deducted from the PAS payout.</p></details>
     </section>
   </main>
-  <footer><span>Test tokens. Real possibilities.</span><div><a href="https://github.com/r0gue-io/paseo-faucet" target="_blank" rel="noopener noreferrer">Source code ↗</a><a href="https://forum.polkadot.network" target="_blank" rel="noopener noreferrer">Polkadot Forum ↗</a></div></footer>
+  <footer><div><a href="https://github.com/r0gue-io/paseo-faucet" target="_blank" rel="noopener noreferrer">Source code ↗</a><a href="https://polkadot.com" target="_blank" rel="noopener noreferrer">Polkadot ↗</a></div></footer>
 `;
 
 function el<T extends HTMLElement>(id: string): T { return document.getElementById(id) as T; }
