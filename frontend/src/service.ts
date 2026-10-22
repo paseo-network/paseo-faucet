@@ -35,6 +35,14 @@ const defaultDependencies = {
 };
 export type FaucetDependencies = typeof defaultDependencies;
 
+/** The key's People (tier 2) or People Lite (tier 1) ring on Paseo People, if it has one. */
+function ringOf(key: { rings: readonly RingLocation[] }, tier: number): RingLocation | undefined {
+  const collection = bytesToHex(new TextEncoder().encode((tier === 2 ? 'pop:polkadot.network/people' : 'pop:polkadot.network/people-lite').padEnd(32, ' ')));
+  return key.rings.find((ring) => ring.chainId.toLowerCase() === PEOPLE_GENESIS
+    && ring.junctions.length === 2 && ring.junctions[0].tag === 'PalletInstance' && ring.junctions[0].value === 67
+    && ring.junctions[1].tag === 'CollectionId' && ring.junctions[1].value.toLowerCase() === collection);
+}
+
 async function allocateFees(request = requestResourceAllocation) {
   const allocation = await request([{ tag: 'SmartContractAllowance', value: { tag: 'Index', value: 0 } }]);
   if (!allocation.ok) throw allocation.error;
@@ -83,9 +91,12 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
     if (await query<string>('DOMAIN') !== bytesToHex(new TextEncoder().encode('paseo-faucet:v2'))) {
       throw new Error('This frontend requires the paseo-faucet:v2 contract. Update the ABI and integration for another version.');
     }
+    const listed = await signerManager.listRingVrfKeys('peopl.dot');
+    const heldTiers = listed.ok ? [2, 1].filter((tier) => listed.value.some((key) => ringOf(key, tier))) : [];
     let claiming = false;
     const service: FaucetService = {
       address: productAccount.address,
+      heldTiers,
       async refresh(): Promise<Snapshot> {
         const epoch = await query<bigint>('currentEpoch');
         const [next, paused, cap, used, balances, destinations, lite, full] = await Promise.all([
@@ -117,11 +128,8 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
             for (const tier of [2, 1]) {
               const config = tier === 2 ? state.full : state.lite;
               if (!config.enabled) continue;
-              const collection = bytesToHex(new TextEncoder().encode((tier === 2 ? 'pop:polkadot.network/people' : 'pop:polkadot.network/people-lite').padEnd(32, ' ')));
               for (const key of keys.value) {
-                const ring = key.rings.find((ring) => ring.chainId.toLowerCase() === PEOPLE_GENESIS
-                  && ring.junctions.length === 2 && ring.junctions[0].tag === 'PalletInstance' && ring.junctions[0].value === 67
-                  && ring.junctions[1].tag === 'CollectionId' && ring.junctions[1].value.toLowerCase() === collection);
+                const ring = ringOf(key, tier);
                 if (ring) { candidates.push({ tier, key, ring }); break; }
               }
             }

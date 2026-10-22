@@ -37,6 +37,8 @@ export interface Skipped { id: number; reason: SkipReason; }
 export interface Receipt { txHash: string; recipient: Hex; paid: Payout[]; skipped: Skipped[]; }
 export interface FaucetService {
   address: string;
+  /** The tiers the person holds a personhood key for, full (2) before lite (1). */
+  heldTiers: number[];
   refresh(): Promise<Snapshot>;
   claim(recipient: Hex, progress: (message: string) => void): Promise<Receipt>;
   destroy(): void;

@@ -17,7 +17,7 @@ function emitted(eventName: 'Dripped' | 'DripSkipped', destinationId: number, va
     : encodeAbiParameters([{ type: 'uint8' }, { type: 'bytes32' }, { type: 'uint8' }], [2, alias, Number(values[0])]);
   return { type: 'Revive', value: { type: 'ContractEmitted', value: { contract: from, data: hexToBytes(data), topics } } };
 }
-function setup(options: { claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; } = {}) {
+function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; } = {}) {
   const calls: string[] = [];
   let proofs = 0, txs = 0, drys = 0;
   let transactionArgs: unknown[] = [];
@@ -29,7 +29,11 @@ function setup(options: { claimed?: number[]; contextMismatch?: boolean; fullNot
   class Manager {
     async connect() { return { ok: true, value: [] }; }
     async getProductAccount() { return { ok: true, value: { address: 'product-account', getSigner: () => 'product-signer' } }; }
-    async listRingVrfKeys() { return { ok: true, value: [{ handle: 'full', rings: [ring(false)] }, { handle: 'lite', rings: [ring(true)] }] }; }
+    async listRingVrfKeys() {
+      if (options.listDenied) return { ok: false, error: new Error('NotAllowlisted') };
+      const keys = [{ handle: 'full', rings: [ring(false)] }, { handle: 'lite', rings: [ring(true)] }];
+      return { ok: true, value: keys.filter((key) => (options.heldKeys ?? ['full', 'lite']).includes(key.handle)) };
+    }
     async createRingVRFProof(handle: string, ctx: unknown, location: unknown, message: Uint8Array) {
       calls.push('proof'); ++proofs;
       assert.deepEqual(ctx, { productId: 'faucet.dot', suffix: { tag: 'Index', value: 20000 } });
@@ -120,6 +124,13 @@ test('a person paid on some chains can claim the rest; paid on every enabled cha
     const faucet = await connectFaucet(contract, 'faucet.dot', mock.dependencies);
     await assert.rejects(faucet.claim(recipient, () => {}));
     assert.equal(mock.counts.txs, 0);
+  }
+});
+test('connect reports the personhood tiers the person holds a key for', async () => {
+  const cases: [Parameters<typeof setup>[0], number[]][] = [[{}, [2, 1]], [{ heldKeys: ['lite'] }, [1]], [{ listDenied: true }, []]];
+  for (const [options, expected] of cases) {
+    const faucet = await connectFaucet(contract, 'faucet.dot', setup(options).dependencies);
+    assert.deepEqual(faucet.heldTiers, expected);
   }
 });
 test('new product accounts allocate fees before account mapping', async () => {

@@ -3,7 +3,7 @@ import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
 import '@fontsource/dm-serif-display/400.css';
 import './style.css';
-import { ASSET_HUB, chainInfo, claimBlocker, formatAmount, isEthereumDerived, netPas, parseRecipient, planPayouts, type FaucetService, type Payout, type Receipt, type Snapshot, type SkipReason } from './model';
+import { ASSET_HUB, chainInfo, claimBlocker, formatAmount, isEthereumDerived, netPas, parseRecipient, planPayouts, type FaucetService, type Payout, type Receipt, type Snapshot, type SkipReason, type TierConfig } from './model';
 import type { Hex } from 'viem';
 
 const contractAddress = import.meta.env.VITE_FAUCET_ADDRESS?.trim() || '';
@@ -35,7 +35,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <p id="address-help" class="field-help">Where should we send your test tokens? The same account is paid on every chain.</p>
           <p id="address-error" class="field-error" hidden></p>
         </div>
-        <div id="payout-summary" class="payout-summary" hidden><div><span class="summary-label">You’ll receive</span><ul id="payout" class="payout-list"></ul></div><span class="token-mark" aria-hidden="true">✳</span></div>
+        <div id="payout-summary" class="payout-summary" hidden><div><span class="summary-label">You’ll receive</span><ul id="payout" class="payout-list"></ul></div></div>
         <p id="payout-help" class="field-help" hidden></p>
         <div id="notice" class="notice" role="status" aria-live="polite"></div>
         <button class="submit-btn" id="claim" type="submit" disabled>Get some PAS</button>
@@ -100,23 +100,29 @@ function validate(showError = false) {
   el('address-error').hidden = !showError || !error;
   el('address-error').textContent = error;
   addressInput.setAttribute('aria-invalid', String(showError && !valid));
-  el('payout-summary').hidden = el('payout-help').hidden = !state;
-  const blocked = state && [state.full, state.lite].every(t => claimBlocker(state!, t) !== null);
+  el('payout-summary').hidden = el('payout-help').hidden = !state || !el('payout').childElementCount;
+  const tier = personTier();
+  const blocked = state && (!tier || claimBlocker(state, tier) !== null);
   claimButton.disabled = busy || !valid || !service || !state || Boolean(blocked);
   return valid;
+}
+/** The tier a claim would use: the first the person holds a key for that is open, full before lite. */
+function personTier(): TierConfig | undefined {
+  if (!state || !service) return undefined;
+  const config: Record<number, TierConfig> = { 2: state.full, 1: state.lite };
+  return service.heldTiers.map(t => config[t]).find(t => t.enabled);
 }
 function render() {
   if (!state) {
     notice(configured ? 'Connect in a Polkadot host to check eligibility and request tokens.' : 'The new faucet is being prepared. Claims will open after the contract is deployed and funded.');
     return validate();
   }
-  const tier = state.full.enabled ? state.full : state.lite;
-  notice(claimBlocker(state, tier) ?? 'Your app will prove personhood before you confirm the claim.');
-  const { paid, skipped } = planPayouts(state.destinations, state, tier);
-  if (tier.enabled && paid.length) {
-    fillList(el('payout'), [...paid.map(p => ({ text: payoutText(p) })), ...skipped.map(s => ({ text: `${chainInfo(s.id).name}: skipped, ${SKIP_TEXT[s.reason]}` }))]);
-    el('payout-help').textContent = `${state.full.enabled ? 'Full' : 'Lite'} personhood amounts shown${state.full.enabled && state.lite.enabled ? '; lite persons receive the lite amounts' : ''}. Other chains deduct their execution fee from the PAS and return what it does not use.`;
-  } else { fillList(el('payout'), [{ text: '— PAS' }]); el('payout-help').textContent = 'Payout information is unavailable.'; }
+  const tier = personTier();
+  if (!service?.heldTiers.length) notice('Your Polkadot app has no People or People Lite key this faucet can use.');
+  else notice(tier ? claimBlocker(state, tier) ?? '' : 'Claims for your personhood tier are temporarily disabled.');
+  const { paid, skipped } = tier ? planPayouts(state.destinations, state, tier) : { paid: [], skipped: [] };
+  fillList(el('payout'), paid.length ? [...paid.map(p => ({ text: payoutText(p) })), ...skipped.map(s => ({ text: `${chainInfo(s.id).name}: skipped, ${SKIP_TEXT[s.reason]}` }))] : []);
+  el('payout-help').textContent = `For a ${tier === state.full ? 'full' : 'lite'} person.${paid.some(p => p.id !== ASSET_HUB) ? ' Other chains deduct their execution fee from the PAS and return what it does not use.' : ''}`;
   const next = new Date(Number(state.nextEpochStart) * 1000);
   el('faucet-status').textContent = state.paused ? 'Faucet paused' : `${state.used.toLocaleString()} / ${state.cap.toLocaleString()} claims this period`;
   el('faucet-status').title = `Next period: ${next.toLocaleString()}`;
