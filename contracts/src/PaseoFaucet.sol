@@ -182,6 +182,8 @@ contract PaseoFaucet {
         emit EpochCapUpdated(cap);
     }
 
+    // address(0) leaves the faucet without a pauser
+    // forge-lint: disable-next-line(missing-zero-check)
     function setPauser(address newPauser) external onlyOwner {
         pauser = newPauser;
         emit PauserUpdated(newPauser);
@@ -229,9 +231,13 @@ contract PaseoFaucet {
             if (!sent) revert PayoutFailed();
         }
         if (pusd != 0 && !PUSD.transfer(msg.sender, pusd)) revert PayoutFailed();
+        // the transfers before it pay the owner, the only caller
+        // forge-lint: disable-next-line(reentrancy-events)
         emit Withdrawn(msg.sender, pas, pusd);
     }
 
+    // address(0) cancels a pending transfer
+    // forge-lint: disable-next-line(missing-zero-check)
     function transferOwnership(address newOwner) external onlyOwner {
         pendingOwner = newOwner;
         emit OwnershipTransferStarted(owner, newOwner);
@@ -245,6 +251,8 @@ contract PaseoFaucet {
     }
 
     function currentEpoch() public view returns (uint64) {
+        // casting to 'uint64' is safe because a time in seconds over epochSeconds fits in 64 bits
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint64(block.timestamp / epochSeconds);
     }
 
@@ -255,11 +263,15 @@ contract PaseoFaucet {
     /// @notice `blake2b_256("product/" ++ productId ++ "/" ++ u32_le(epoch) ++ INDEX_MAGIC)`, the context a host
     ///         derives for `{ productId, Index(epoch) }`.
     function contextFor(uint64 epoch) public view returns (bytes32) {
+        // the host fixes this layout; productId is immutable and the epoch has a fixed width
+        // forge-lint: disable-next-line(encode-packed-collision)
         return SYSTEM.hashBlake256(abi.encodePacked("product/", productId, "/", XcmProgram.le(epoch, 4), INDEX_MAGIC));
     }
 
     /// @notice The 83-byte message a proof must sign: domain, contract, chain id, epoch, recipient.
     function messageFor(uint64 epoch, bytes32 recipient) public view returns (bytes memory) {
+        // casting to 'uint64' is safe because the message encodes the chain id as u64 and Paseo Asset Hub's fits
+        // forge-lint: disable-next-line(unsafe-typecast)
         return abi.encodePacked(DOMAIN, address(this), uint64(block.chainid), epoch, recipient);
     }
 
@@ -326,10 +338,14 @@ contract PaseoFaucet {
             uint128 pusd = _pusdFor(d, t.pusd);
             Skip reason = _leg(d, recipient, t.pas, pusd);
             if (reason == Skip.None) {
+                // the call before it is the faucet's own payLeg, which only runs precompiles
+                // forge-lint: disable-next-line(reentrancy-events)
                 emit Dripped(epoch, tier, contextAlias, d.id, recipient, t.pas, pusd);
             } else {
                 // forge-lint: disable-next-line(incorrect-shift)
                 skipped |= 1 << i;
+                // the call before it is the faucet's own payLeg, which only runs precompiles
+                // forge-lint: disable-next-line(reentrancy-events)
                 emit DripSkipped(epoch, tier, contextAlias, d.id, recipient, reason);
             }
         }
@@ -341,6 +357,8 @@ contract PaseoFaucet {
     function _leg(Destination memory d, bytes32 recipient, uint128 pas, uint128 pusd) private returns (Skip) {
         Skip reason = _skip(d, pas);
         if (reason != Skip.None) return reason;
+        // one call per destination, so that a failed payout reverts alone
+        // forge-lint: disable-next-line(calls-loop)
         try this.payLeg(d, recipient, pas, pusd) {
             return Skip.None;
         } catch {
@@ -355,6 +373,8 @@ contract PaseoFaucet {
             ? XcmProgram.deposit(recipient, pas, pusd)
             : XcmProgram.transfer(d.id, d.pasTransfer, d.pusdTransfer, d.remoteFee, recipient, pas, pusd);
         uint256 before = address(this).balance;
+        // the XCM precompile runs no contract code; the balance check after it bounds the delivery fee
+        // forge-lint: disable-next-line(reentrancy-balance)
         try XCM.execute(program, XCM.weighMessage(program)) {}
         catch {
             revert PayoutFailed();
@@ -376,6 +396,8 @@ contract PaseoFaucet {
 
     /// @dev The tier's pUSD where `d` takes pUSD, the amount reaches its minimum and the faucet holds it; else none.
     function _pusdFor(Destination memory d, uint128 amount) private view returns (uint128) {
+        // the pUSD balance is read per destination, after the payouts before it
+        // forge-lint: disable-next-line(calls-loop)
         if (d.pusdTransfer == Transfer.None || amount < d.minPusd || PUSD.balanceOf(address(this)) < amount) return 0;
         return amount;
     }

@@ -10,5 +10,8 @@ evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 
+[lint]
+exclude_lints = ["uninitialized-local"]
+
 [fmt]
 ignore = ["src/interfaces/IPersonhood.sol", "src/interfaces/ISystem.sol", "src/interfaces/IXcm.sol"]
