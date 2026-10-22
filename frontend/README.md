@@ -54,7 +54,9 @@ transport; there is no WebSocket or backend fallback.
 Which chains are paid, the amounts, caps and balances come from the deployed contract, not
 from that list. `contracts/script/Deploy.s.sol` registers only Asset Hub and People; other
 chains need operator configuration and verified arrival tests. The frontend does not register
-destinations or invent their fees.
+destinations or invent their fees. The FAQ's tables of amounts per tier and assets per chain
+are static: update them in `src/main.ts` whenever the owner changes the tiers or the
+destinations.
 
 ## Contract integration
 

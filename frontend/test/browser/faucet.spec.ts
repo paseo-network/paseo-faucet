@@ -32,6 +32,15 @@ test('the address query parameter prefills the recipient; a chain parameter is i
   await expect(page.locator('select')).toHaveCount(0);
 });
 
+test('the FAQ tables show the faucet configuration without connecting', async ({ page }) => {
+  await page.goto('/');
+  for (const question of ['Why do I need proof of personhood?', 'Which chains are paid?']) {
+    await page.getByText(question, { exact: true }).click();
+  }
+  await expect(page.locator('.faq-table table')).toHaveCount(2);
+  await expect(page.locator('.faq-table').nth(1).locator('tbody th')).toHaveText(['Asset Hub', 'People', 'Bulletin', 'Asset Hub Next', 'People Next', 'Bulletin Next']);
+});
+
 test('mobile layout is accessible and does not overflow', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');
