@@ -36,8 +36,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <p id="address-help" class="field-help">Where should we send your test tokens? The same account is paid on every chain.</p>
           <p id="address-error" class="field-error" hidden></p>
         </div>
-        <div class="payout-summary"><div><span class="summary-label">You’ll receive</span><ul id="payout" class="payout-list"><li>— PAS</li></ul></div><span class="token-mark" aria-hidden="true">✳</span></div>
-        <p id="payout-help" class="field-help">Amounts are set by the faucet for your personhood tier.</p>
+        <div id="payout-summary" class="payout-summary" hidden><div><span class="summary-label">You’ll receive</span><ul id="payout" class="payout-list"></ul></div><span class="token-mark" aria-hidden="true">✳</span></div>
+        <p id="payout-help" class="field-help" hidden></p>
         <div id="notice" class="notice" role="status" aria-live="polite"></div>
         <button class="submit-btn" id="claim" type="submit" disabled>Get some PAS</button>
         <p class="claim-note"><span aria-hidden="true">♧</span> One claim per person, tier and period pays every chain listed.</p>
@@ -101,6 +101,7 @@ function validate(showError = false) {
   el('address-error').hidden = !showError || !error;
   el('address-error').textContent = error;
   addressInput.setAttribute('aria-invalid', String(showError && !valid));
+  el('payout-summary').hidden = el('payout-help').hidden = !state;
   const blocked = state && [state.full, state.lite].every(t => claimBlocker(state!, t) !== null);
   claimButton.disabled = busy || !valid || !service || !state || Boolean(blocked);
   return valid;

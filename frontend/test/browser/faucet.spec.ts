@@ -6,7 +6,7 @@ test('Paseo-only landing page has no chain picker and an honest setup state', as
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Testnet Faucet', exact: true })).toBeVisible();
   await expect(page.locator('select')).toHaveCount(0);
-  await expect(page.locator('#payout')).toHaveText('— PAS');
+  await expect(page.locator('#payout-summary')).toBeHidden();
   await expect(page.locator('#claim')).toBeDisabled();
   await expect(page.locator('#notice')).toContainText('contract is deployed');
   await page.getByRole('button', { name: 'Connect Polkadot app' }).click();
