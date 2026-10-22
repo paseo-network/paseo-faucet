@@ -12,6 +12,7 @@ test('Paseo-only landing page has no chain picker and an honest setup state', as
   await page.getByRole('button', { name: 'Connect Polkadot app' }).click();
   await expect(page.locator('#notice')).toContainText('not been deployed');
   await expect(page.locator('#connection-label')).toHaveText('Not connected');
+  await expect(page.locator('#connection-label')).toBeDisabled();
   expect(errors).toEqual([]);
 });
 

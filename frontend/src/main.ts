@@ -26,7 +26,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <h1 id="title">Testnet Faucet</h1>
       <section class="how-it-works" aria-label="How to claim"><span><b>1</b> Connect your app</span><span class="step-divider" aria-hidden="true"></span><span><b>2</b> Enter your address</span><span class="step-divider" aria-hidden="true"></span><span><b>3</b> Get test tokens</span></section>
       <div class="connection-row">
-        <span class="connection-status"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Not connected</span></span>
+        <span class="connection-status"><span class="status-dot" id="connection-dot"></span><button id="connection-label" class="address-copy" type="button" disabled>Not connected</button></span>
         <button id="connect" class="text-button" type="button">Connect Polkadot app <span aria-hidden="true">↗</span></button>
       </div>
       <form id="claim-form" novalidate>
@@ -59,6 +59,7 @@ function el<T extends HTMLElement>(id: string): T { return document.getElementBy
 const addressInput = el<HTMLInputElement>('address');
 const claimButton = el<HTMLButtonElement>('claim');
 const connectButton = el<HTMLButtonElement>('connect');
+const accountButton = el<HTMLButtonElement>('connection-label');
 const form = el<HTMLFormElement>('claim-form');
 function notice(message: string, kind = 'info') {
   el('notice').textContent = message;
@@ -138,22 +139,40 @@ connectButton.addEventListener('click', async () => {
   const run = ++generation;
   setBusy(true); notice('Connecting to your Polkadot app…');
   service?.destroy(); service = undefined; state = undefined;
-  el('connection-label').textContent = 'Connecting…'; el('connection-dot').classList.remove('online');
+  showAccount('Connecting…'); el('connection-dot').classList.remove('online');
   try {
     const { connectFaucet } = await import('./service');
     const connected = await connectFaucet(contractAddress as Hex, productId);
     if (destroyed || run !== generation) { connected.destroy(); return; }
     service = connected;
     state = await connected.refresh();
-    el('connection-label').textContent = `${connected.address.slice(0, 6)}…${connected.address.slice(-6)}`;
+    showAccount(`${connected.address.slice(0, 6)}…${connected.address.slice(-6)}`, connected.address);
     el('connection-dot').classList.add('online'); connectButton.textContent = 'Reconnect ↗';
     el('use-account').hidden = false;
     if (!addressInput.value) addressInput.value = connected.address;
     render();
   } catch (error) {
     service?.destroy(); service = undefined; state = undefined;
-    el('connection-label').textContent = 'Not connected'; notice((error as Error).message, 'error');
+    showAccount('Not connected'); notice((error as Error).message, 'error');
   } finally { if (!destroyed && run === generation) setBusy(false); }
+});
+/** Shows the connection state; with an address, the label is a button that copies it. */
+function showAccount(text: string, address?: string) {
+  accountButton.textContent = text;
+  accountButton.disabled = !address;
+  accountButton.title = address ? 'Copy the full address' : '';
+}
+accountButton.addEventListener('click', async () => {
+  if (!service) return;
+  const { address } = service;
+  const shown = accountButton.textContent;
+  try {
+    await navigator.clipboard.writeText(address);
+  } catch {
+    return notice(`Copying is not available here. Your address is ${address}`);
+  }
+  accountButton.textContent = 'Copied';
+  setTimeout(() => { if (service?.address === address) accountButton.textContent = shown; }, 1500);
 });
 addressInput.addEventListener('input', () => validate(Boolean(addressInput.value)));
 addressInput.addEventListener('blur', () => validate(Boolean(addressInput.value)));
