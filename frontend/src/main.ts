@@ -30,9 +30,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <button id="connect" class="text-button" type="button">Connect Polkadot app <span aria-hidden="true">↗</span></button>
       </div>
       <form id="claim-form" novalidate>
-        <div class="field-group address-group"><div class="label-row"><label for="address">Paseo address</label><button id="use-account" class="text-button" type="button" hidden>Use connected account</button></div>
+        <div class="field-group address-group"><div class="label-row"><label for="address">Beneficiary</label><button id="use-account" class="text-button" type="button" hidden>Use connected account</button></div>
           <input id="address" name="address" type="text" placeholder="Your Substrate address or 0x address" autocomplete="off" spellcheck="false" aria-describedby="address-help address-error">
-          <p id="address-help" class="field-help">Where should we send your test tokens? The same account is paid on every chain.</p>
+          <p id="address-help" class="field-help">Where should the tokens be sent? The same account is paid on every chain.</p>
           <p id="address-error" class="field-error" hidden></p>
         </div>
         <div id="payout-summary" class="payout-summary" hidden><div><span class="summary-label">You’ll receive</span><ul id="payout" class="payout-list"></ul></div></div>

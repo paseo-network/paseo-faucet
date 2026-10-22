@@ -18,18 +18,18 @@ test('Paseo-only landing page has no chain picker and an honest setup state', as
 
 test('an Ethereum recipient is warned that only Asset Hub can use it, an invalid one is refused', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Paseo address').fill('0x1234567890123456789012345678901234567890');
+  await page.getByLabel('Beneficiary').fill('0x1234567890123456789012345678901234567890');
   await expect(page.locator('#address-error')).toContainText('Only Asset Hub');
-  await page.getByLabel('Paseo address').fill('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
+  await page.getByLabel('Beneficiary').fill('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
   await expect(page.locator('#address-error')).toBeHidden();
-  await page.getByLabel('Paseo address').fill('not-an-address');
+  await page.getByLabel('Beneficiary').fill('not-an-address');
   await expect(page.locator('#address-error')).toContainText('valid Substrate');
   await expect(page.locator('#claim')).toBeDisabled();
 });
 
 test('the address query parameter prefills the recipient; a chain parameter is ignored', async ({ page }) => {
   await page.goto('/?parachain=1004&address=test-address');
-  await expect(page.getByLabel('Paseo address')).toHaveValue('test-address');
+  await expect(page.getByLabel('Beneficiary')).toHaveValue('test-address');
   await expect(page.locator('select')).toHaveCount(0);
 });
 
