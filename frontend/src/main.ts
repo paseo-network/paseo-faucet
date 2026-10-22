@@ -24,13 +24,12 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <section class="faucet-card" aria-labelledby="title">
       <div class="eyebrow"><span class="network-dot"></span> PASEO TESTNET</div>
       <h1 id="title">Testnet Faucet</h1>
-      <p class="card-subtitle">Get PAS tokens for Polkadot’s Paseo testnet<br class="desktop-break"> and its parachains.</p>
+      <section class="how-it-works" aria-label="How to claim"><span><b>1</b> Connect your app</span><span class="step-divider" aria-hidden="true"></span><span><b>2</b> Enter your address</span><span class="step-divider" aria-hidden="true"></span><span><b>3</b> Get test tokens</span></section>
       <div class="connection-row">
         <span class="connection-status"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Not connected</span></span>
         <button id="connect" class="text-button" type="button">Connect Polkadot app <span aria-hidden="true">↗</span></button>
       </div>
       <form id="claim-form" novalidate>
-        <div class="field-group"><label for="network">Network</label><div class="fixed-network" id="network"><span class="paseo-icon" aria-hidden="true">P</span> Paseo <span class="testnet-tag">Testnet</span></div></div>
         <div class="field-group address-group"><div class="label-row"><label for="address">Paseo address</label><button id="use-account" class="text-button" type="button" hidden>Use connected account</button></div>
           <input id="address" name="address" type="text" placeholder="Your Substrate address or 0x address" autocomplete="off" spellcheck="false" aria-describedby="address-help address-error">
           <p id="address-help" class="field-help">Where should we send your test tokens? The same account is paid on every chain.</p>
@@ -45,8 +44,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div id="success" class="success" role="status" hidden><div class="success-icon" aria-hidden="true">✓</div><h2 id="success-title">Claim confirmed</h2><p id="success-message"></p><ul id="success-list" class="payout-list"></ul><a id="transaction-link" target="_blank" rel="noopener noreferrer">View transaction ↗</a><button class="secondary-btn" id="back" type="button">Back to faucet</button></div>
       <div class="card-bottom"><span><span class="status-dot" id="faucet-dot"></span> <span id="faucet-status">Faucet status unavailable</span></span><button id="refresh" type="button" class="text-button" hidden>Refresh ↻</button></div>
     </section>
-    <section class="how-it-works" aria-label="How to claim"><span><b>1</b> Connect your app</span><span class="step-divider" aria-hidden="true"></span><span><b>2</b> Enter your address</span><span class="step-divider" aria-hidden="true"></span><span><b>3</b> Get test tokens</span></section>
-    <section id="faq" class="faq" aria-labelledby="faq-title"><span class="eyebrow">GOOD TO KNOW</span><h2 id="faq-title">Frequently asked questions</h2>
+    <section id="faq" class="faq" aria-labelledby="faq-title"><h2 id="faq-title">Frequently asked questions</h2>
       <details><summary>What is Paseo?</summary><p>Paseo is Polkadot’s test network. Use PAS to try transactions, build applications and test integrations before using a production network. These are test tokens with no monetary value.</p></details>
       <details><summary>How do I get test tokens?</summary><p>Open this product in a supported Polkadot host and connect your app. Enter the recipient address and confirm the claim. The host provides a personhood proof and requests PGAS to cover transaction fees.</p></details>
       <details><summary>Why do I need proof of personhood?</summary><p>The faucet limits claims by personhood key instead of wallet address. It checks an anonymous membership proof on chain. Both People and People Lite are supported, with independently configured amounts and quotas.</p></details>
