@@ -70,6 +70,8 @@ library XcmProgram {
         if (value < 1 << 30) return le(value << 2 | 2, 4);
         uint256 size = 4;
         while (value >> (8 * size) != 0) ++size;
+        // casting to 'uint8' is safe because size is at most 32, so the prefix is at most 115
+        // forge-lint: disable-next-line(unsafe-typecast)
         return bytes.concat(bytes1(uint8((size - 4) << 2 | 3)), le(value, size));
     }
 

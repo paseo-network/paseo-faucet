@@ -263,9 +263,9 @@ contract PaseoFaucetTest is Test {
         vm.expectRevert(PaseoFaucet.InvalidProof.selector);
         faucet.drip(Tier.Lite, RECIPIENT, hex"01", ALIAS, RING, REVISION);
 
-        vm.warp(block.timestamp + EPOCH_SECONDS);
+        vm.warp(vm.getBlockTimestamp() + EPOCH_SECONDS);
         _expectInvalidProof(Tier.Lite, RECIPIENT, ALIAS);
-        vm.warp(block.timestamp - EPOCH_SECONDS);
+        vm.warp(vm.getBlockTimestamp() - EPOCH_SECONDS);
         _drip(Tier.Lite, RECIPIENT, ALIAS);
     }
 
@@ -278,7 +278,7 @@ contract PaseoFaucetTest is Test {
 
         _claim(Tier.Full, RECIPIENT, ALIAS);
 
-        vm.warp(block.timestamp + EPOCH_SECONDS);
+        vm.warp(vm.getBlockTimestamp() + EPOCH_SECONDS);
         _claim(Tier.Lite, RECIPIENT, ALIAS);
         assertEq(faucet.dripsInEpoch(START_EPOCH), 2);
         assertEq(faucet.dripsInEpoch(START_EPOCH + 1), 1);
@@ -293,7 +293,7 @@ contract PaseoFaucetTest is Test {
         vm.expectRevert(PaseoFaucet.EpochCapReached.selector);
         _drip(Tier.Lite, RECIPIENT, keccak256("second"));
 
-        vm.warp(block.timestamp + EPOCH_SECONDS);
+        vm.warp(vm.getBlockTimestamp() + EPOCH_SECONDS);
         _claim(Tier.Lite, RECIPIENT, keccak256("second"));
     }
 
