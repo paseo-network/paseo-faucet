@@ -1,0 +1,140 @@
+name: Deploy contract
+
+# Deploys PaseoFaucet to Paseo Asset Hub from main. contracts/script/Deploy.s.sol creates and configures
+# it with the deployer key and proposes OWNER, who accepts ownership outside CI. The source is then
+# verified on Blockscout and the commit is tagged `contract/<YYYY-MM-DD>.<n>` with the address. The
+# settings are the `paseo` environment's variables; DEPLOYER_PRIVATE_KEY is its secret.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A deploy writes on-chain state: runs queue and are never cancelled midway.
+concurrency:
+  group: deploy-contract
+  cancel-in-progress: false
+
+env:
+  ETH_RPC: https://eth-rpc-testnet.polkadot.io
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: paseo
+    outputs:
+      faucet: ${{ steps.address.outputs.faucet }}
+    defaults:
+      run:
+        working-directory: contracts
+    env:
+      PRODUCT_ID: ${{ vars.PRODUCT_ID }}
+      EPOCH_SECONDS: ${{ vars.EPOCH_SECONDS }}
+      MAX_DRIPS_PER_EPOCH: ${{ vars.MAX_DRIPS_PER_EPOCH }}
+      LITE_PAS: ${{ vars.LITE_PAS }}
+      LITE_PUSD: ${{ vars.LITE_PUSD }}
+      FULL_PAS: ${{ vars.FULL_PAS }}
+      FULL_PUSD: ${{ vars.FULL_PUSD }}
+      OWNER: ${{ vars.OWNER }}
+      PAUSER: ${{ vars.PAUSER }}
+    steps:
+      - name: Require main
+        working-directory: .
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::contract deploys run only from main"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.8.5
+
+      - name: Check settings
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: |
+          missing=""
+          for name in PRODUCT_ID EPOCH_SECONDS MAX_DRIPS_PER_EPOCH LITE_PAS LITE_PUSD FULL_PAS FULL_PUSD OWNER PAUSER DEPLOYER_PRIVATE_KEY; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::set these on the paseo environment:$missing"
+            exit 1
+          fi
+
+      # The script reads DEPLOYER_PRIVATE_KEY itself, so the key never appears in a command line.
+      - name: Simulate
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: forge script script/Deploy.s.sol:Deploy --rpc-url "$ETH_RPC"
+
+      - name: Deploy
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: forge script script/Deploy.s.sol:Deploy --rpc-url "$ETH_RPC" --broadcast --slow
+
+      - name: Record the address
+        id: address
+        run: |
+          FAUCET=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress]
+            | if length == 1 then .[0] else error("expected one contract creation") end' \
+            broadcast/Deploy.s.sol/420420417/run-latest.json)
+          echo "faucet=$FAUCET" >> "$GITHUB_OUTPUT"
+          {
+            echo "### PaseoFaucet deployed at \`$FAUCET\`"
+            echo
+            echo "1. \`$OWNER\` accepts ownership: \`acceptOwnership()\` on \`$FAUCET\`."
+            echo "2. Set \`FAUCET_ADDRESS\` on the \`paseo\` environment to \`$FAUCET\`, then run **Deploy app**."
+            echo "3. Fund the faucet with PAS and pUSD."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The contract is live by now; a verification failure is reported, not fatal.
+      - name: Verify the source on Blockscout
+        continue-on-error: true
+        env:
+          FAUCET: ${{ steps.address.outputs.faucet }}
+        run: |
+          forge verify-contract "$FAUCET" src/PaseoFaucet.sol:PaseoFaucet \
+            --chain 420420417 \
+            --verifier blockscout --verifier-url https://blockscout-testnet.polkadot.io/api/ \
+            --constructor-args "$(cast abi-encode 'constructor(string,uint64)' "$PRODUCT_ID" "$EPOCH_SECONDS")" \
+            --watch \
+            || { echo "::warning::source verification failed; retry it with forge verify-contract"; exit 1; }
+
+      # The broadcast record only: forge's cache/ holds the RPC configuration and stays on the runner.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: contract-deploy
+          path: contracts/broadcast/Deploy.s.sol/420420417/run-latest.json
+          retention-days: 90
+
+  tag:
+    needs: deploy
+    name: Tag the deployed commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the deployed commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAUCET: ${{ needs.deploy.outputs.faucet }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          LAST=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/contract/$DATE." --jq '.[].ref' \
+            | sed -n "s#^refs/tags/contract/$DATE\.\([0-9]*\)\$#\1#p" | sort -n | tail -1)
+          TAG="contract/$DATE.$(( ${LAST:-0} + 1 ))"
+          OBJECT=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" -f tag="$TAG" -f type=commit -f object="$GITHUB_SHA" \
+            -f message="PaseoFaucet $FAUCET, deploy run $GITHUB_RUN_ID" --jq .sha)
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$OBJECT" > /dev/null
+          echo "### Tagged \`$TAG\` at ${GITHUB_SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"

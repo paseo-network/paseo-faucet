@@ -478,7 +478,24 @@ not cover.
 For the complete contract + Bulletin/DotNS frontend deployment and real proof-of-personhood
 test sequence, use [Deploy and test the Paseo faucet](docs/DEPLOYMENT.md). It identifies the
 public-Paseo network used here and the matching legacy publishing tooling; current Paseo
-Next publishing defaults target a different network. The contract-only runbook follows.
+Next publishing defaults target a different network. The contract-only runbook follows; GitHub
+Actions can run it for you.
+
+### From GitHub Actions
+
+The **Deploy contract** workflow (`.github/workflows/deploy-contract.yml`, dispatched on `main`)
+runs this runbook's simulation and broadcast with the deployer key, verifies the source on
+Blockscout, and tags the commit `contract/<YYYY-MM-DD>.<n>` with the address. It reads the `paseo`
+environment:
+
+| Name | Kind | Value |
+|---|---|---|
+| `DEPLOYER_PRIVATE_KEY` | secret | the deployer's Ethereum private key, funded with a few PAS. `Deploy.s.sol` reads it from the environment, so it appears in no command line or log. |
+| `PRODUCT_ID`, `EPOCH_SECONDS`, `MAX_DRIPS_PER_EPOCH`, `LITE_PAS`, `LITE_PUSD`, `FULL_PAS`, `FULL_PUSD`, `OWNER`, `PAUSER` | variables | as in [Calls](#calls) |
+
+Restrict the environment to the `main` branch. The run proposes `OWNER`, who then accepts
+ownership as in step 5 of [Calls](#calls); from then on the deployer key controls nothing. The run
+summary lists the next steps, and the broadcast record is kept as an artifact.
 
 ### Goal and scope
 
