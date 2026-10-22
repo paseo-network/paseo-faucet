@@ -7,8 +7,10 @@ context and a message it derives itself. One claim pays the recipient on Asset H
 on every other enabled chain. No server holds funds or keys, and no server decides who is
 eligible.
 
-The front-end is a DotNS product that runs inside the Polkadot hosts. It is not in this
-repository; [Integrating a front-end](#integrating-a-front-end) says what it must send.
+The front-end is a DotNS product that runs inside the Polkadot hosts. The candidate UI is in
+[`frontend/`](frontend/README.md), using the current contract ABI and the existing Polkadot
+faucet's visual design. It is local development work, not a deployed product; see
+[Integrating a front-end](#integrating-a-front-end) for the contract protocol.
 
 **Status:** the contract is implemented, unit tested and checked on forks of the live Paseo
 runtimes. It is not deployed. Next come a whitelist for trusted users and three more
@@ -368,6 +370,7 @@ contracts/                      Foundry project; forge-std is a git submodule in
   script/Deploy.s.sol           deploys, configures and proposes the owner; launch() holds the launch entries
   test/                         unit tests with the precompiles mocked at their addresses, golden XCM vectors, a deploy test
   test/harness/FaucetHarness.sol  test-only subclass with owner-only pay() and dripWithoutProof(); for the fork check, never for real funds
+frontend/                       Paseo-only static UI, Product SDK integration, unit and browser tests
 fork/                           fork check: chopsticks forks of the Paseo chains, driven with papi and viem
   check.ts                      the checks; writes docs/evidence/fork-check.json
   lib.ts                        fork, transaction and contract helpers
@@ -455,6 +458,11 @@ not in this repository, so the run cannot be repeated from here; the file says w
 not cover.
 
 ## Deployment
+
+For the complete contract + Bulletin/DotNS frontend deployment and real proof-of-personhood
+test sequence, use [Deploy and test the Paseo faucet](docs/DEPLOYMENT.md). It identifies the
+public-Paseo network used here and the matching legacy publishing tooling; current Paseo
+Next publishing defaults target a different network. The contract-only runbook follows.
 
 ### Goal and scope
 
@@ -719,7 +727,9 @@ with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
    fork, add them to `launch()` and to the fork check, then pass a live arrival test.
 3. **CI** that runs `forge fmt --check`, `forge build`, `forge lint` and `forge test` on every
    pull request.
-4. **The faucet product**, as its own change ([SPEC section 10](docs/SPEC.md#10-product-specification)).
+4. **The faucet product** ([SPEC section 10](docs/SPEC.md#10-product-specification)). A candidate
+   frontend now lives in `frontend/`; deployment configuration and real-host end-to-end checks
+   remain, followed by publication through DotNS/Bulletin.
 5. **SP-01, host half.** A proof produced by a real host (Android, TrUAPI `createAccountProof`)
    for `{ productId, Index(epoch) }` and the 83-byte message, accepted on live Paseo Asset Hub
    for a lite and a full person.
