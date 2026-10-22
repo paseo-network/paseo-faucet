@@ -312,11 +312,6 @@
         "internalType": "enum Tier"
       },
       {
-        "name": "destinationId",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
         "name": "recipient",
         "type": "bytes32",
         "internalType": "bytes32"
@@ -395,6 +390,11 @@
         "name": "contextAlias",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "id",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "outputs": [
@@ -427,11 +427,6 @@
         "name": "epoch",
         "type": "uint64",
         "internalType": "uint64"
-      },
-      {
-        "name": "destinationId",
-        "type": "uint32",
-        "internalType": "uint32"
       },
       {
         "name": "recipient",
@@ -506,6 +501,76 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "payLeg",
+    "inputs": [
+      {
+        "name": "d",
+        "type": "tuple",
+        "internalType": "struct Destination",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "pasTransfer",
+            "type": "uint8",
+            "internalType": "enum Transfer"
+          },
+          {
+            "name": "pusdTransfer",
+            "type": "uint8",
+            "internalType": "enum Transfer"
+          },
+          {
+            "name": "remoteFee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "maxDeliveryFee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minPas",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minPusd",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      },
+      {
+        "name": "recipient",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "pas",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "pusd",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -818,6 +883,49 @@
   },
   {
     "type": "event",
+    "name": "DripSkipped",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "tier",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum Tier"
+      },
+      {
+        "name": "contextAlias",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "destinationId",
+        "type": "uint32",
+        "indexed": true,
+        "internalType": "uint32"
+      },
+      {
+        "name": "recipient",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reason",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum Skip"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Dripped",
     "inputs": [
       {
@@ -1023,32 +1131,12 @@
   },
   {
     "type": "error",
-    "name": "BelowDestinationMinimum",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DestinationNotEnabled",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "EpochCapReached",
     "inputs": []
   },
   {
     "type": "error",
     "name": "FaucetPaused",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientPas",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientPusd",
     "inputs": []
   },
   {
@@ -1069,6 +1157,16 @@
   {
     "type": "error",
     "name": "NotPauser",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotSelf",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NothingToPay",
     "inputs": []
   },
   {

@@ -28,7 +28,9 @@ canary test, follow [Deploy and test the Paseo faucet](../docs/DEPLOYMENT.md).
 
 ## Scope and chain identity
 
-Only Paseo is supported. The seven display choices are:
+Only Paseo is supported. One claim pays every chain the contract has enabled; the frontend
+only carries display names and explorer links for these para ids, and shows any other id as
+`Parachain <id>`:
 
 | Chain | Registry ID |
 |---|---:|
@@ -40,9 +42,8 @@ Only Paseo is supported. The seven display choices are:
 | Bulletin Next | 1501 |
 | People Next | 1502 |
 
-Bulletin (1010) and Bulletin Next (1501) are separate choices, as confirmed by the user.
-Both are always listed; no Bulletin selector environment setting is needed. No Westend,
-Coretime or Bridge Hub option is included.
+Bulletin (1010) and Bulletin Next (1501) are separate chains. Westend, Coretime and Bridge
+Hub are not listed.
 
 The contract remains on public Paseo Asset Hub (1000), even when the recipient is on a Next
 chain. The SDK descriptor is `devnet_asset_hub`, with its genesis checked against
@@ -50,16 +51,17 @@ chain. The SDK descriptor is `devnet_asset_hub`, with its genesis checked agains
 The SDK preset named `paseo` is a different network. Host-provided chain access is the only
 transport; there is no WebSocket or backend fallback.
 
-The displayed catalog limits product scope. Availability, amounts, caps and balances come
-from the deployed contract, not that catalog. A chain that is missing, disabled or unable to
-pay cannot be claimed. Ale's current deployment script registers only Asset Hub and People;
-the other entries need operator configuration and verified arrival tests. The frontend does
-not register destinations or invent their fees.
+Which chains are paid, the amounts, caps and balances come from the deployed contract, not
+from that list. `contracts/script/Deploy.s.sol` registers only Asset Hub and People; other
+chains need operator configuration and verified arrival tests. The frontend does not register
+destinations or invent their fees. The FAQ's tables of amounts per tier and assets per chain
+are static: update them in `src/main.ts` whenever the owner changes the tiers or the
+destinations.
 
 ## Contract integration
 
-`src/faucet.abi.json` is exported from Ale's compiled contract, not the removed alternative
-implementation. Regenerate it after any contract change:
+`src/faucet.abi.json` is exported from the compiled contract. Regenerate it after any contract
+change:
 
 ```sh
 cd contracts
@@ -68,11 +70,10 @@ cd ../frontend
 npm run abi
 ```
 
-The current implementation is explicitly **v1, single destination**. Connection validates
-`productId()` and `DOMAIN`. A v2 multi-chain contract requires an ABI and flow update; the
-frontend refuses to silently use its v1 assumptions against a changed domain. The whitelist
-and pay-every-enabled-chain requirements remain unimplemented in the contract and are not
-presented as working UI features.
+The frontend speaks the `paseo-faucet:v2` contract, where one claim pays every enabled chain.
+Connection validates `productId()` and `DOMAIN`, and refuses a contract with another domain
+rather than use the wrong message format. The whitelist (REQ-19) is not built in the contract
+and has no UI.
 
 The integration:
 
@@ -80,22 +81,33 @@ The integration:
 2. Checks account mapping. For a new account, requests PGAS before asking the SDK to create
    the mapping. A PGAS top-up is requested only below a conservative 1-PGAS fee/deposit buffer,
    not on every click. Real zero-PAS setup still needs a host canary test.
-3. Reads contract state and obtains the exact `contextFor` and `messageFor` values.
+3. Reads contract state and obtains the exact `contextFor(epoch)` and
+   `messageFor(epoch, recipient)` values, and shows what each enabled chain would receive,
+   by the contract's rules (minimum, balance including `maxDeliveryFee`, pUSD where offered).
 4. Selects People or People Lite keys by declared ring metadata, public Paseo People genesis
    and collection. It does not assume foreign key indexes.
-5. Requests a proof, checks its context, SCALE-prefixes it, and checks the alias's epoch quota.
-   Full is preferred; a missing membership or already-claimed full alias can fall back to lite.
-   Host permission failures stop immediately.
+5. Requests a proof, checks its context, SCALE-prefixes it, and checks the alias's quota with
+   `hasClaimed(epoch, tier, alias, id)` for every enabled chain: an alias every enabled chain
+   has paid this epoch is done, one with chains still due claims them. Full is preferred; a
+   missing membership or a full alias with nothing due can fall back to lite. Host permission
+   failures stop immediately.
 6. Dry-runs `drip`, obtains the user's signature, submits **without value** and waits for
    finality. A stale epoch or an invalid preflight proof gets one regeneration attempt.
    A transaction that may already have been submitted is never automatically resubmitted.
-7. Links to the Asset Hub transaction. For remote claims, confirmation means dispatch;
-   destination arrival is asynchronous and has a separate explorer link.
+7. Decodes the transaction's `Dripped` and `DripSkipped` events and lists what each chain
+   received or why it was skipped; a skipped chain can be claimed again in the same period.
+   Links to the Asset Hub transaction. For other chains, confirmation means dispatch; arrival
+   is asynchronous and each has its own explorer link.
 
-SS58 addresses of any prefix decode to AccountId32. H160 is accepted only for Asset Hub.
-Ethereum-derived `0xEE`-padded recipients are blocked for remote destinations to avoid the
-account-access problem described in the abuse review. PAS formatting uses integer plancks
-(10 decimals), and pUSD uses 6 decimals, without floating-point balance conversion.
+The UI blocks claims once the epoch cap is reached. The contract still lets a person collect
+chains skipped earlier in that period; the UI does not offer that, because it cannot know the
+person's alias before asking for a proof.
+
+SS58 addresses of any prefix decode to AccountId32, and an H160 to its `0xEE` account. The
+same account is paid on every enabled chain, and only Asset Hub can use an `0xEE` account, so
+the form warns that what other chains receive for it cannot be spent (K-27 in the abuse
+review). PAS formatting uses integer plancks (10 decimals), and pUSD uses 6 decimals, without
+floating-point balance conversion.
 
 ## Verification
 
@@ -107,10 +119,11 @@ npm run test:ui
 ```
 
 For a separately installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its executable.
-The browser tests start and stop their own Vite server on port 4173. Tests cover the seven-chain
-catalog, address validation, proof encoding, advisory eligibility, signer/ABI handoff, tier
-fallback, retries, duplicate/context rejection, new-account setup, responsive layouts, deep
-links and absence of third-party requests on the disconnected page. The SDK-facing tests use
+The browser tests start and stop their own Vite server on port 4173. Tests cover chain display
+data, address handling, proof encoding, the payout plan and advisory eligibility, the
+signer/ABI handoff, the per-chain quota, event decoding, tier fallback, retries, context
+rejection, new-account setup, responsive layouts, the address deep link and absence of
+third-party requests on the disconnected page. The SDK-facing tests use
 explicit test doubles; they do not replace a real host or a cryptographic proof test.
 
 The production SDK descriptor metadata is a large, separately loaded chunk. The initial page
@@ -119,6 +132,5 @@ reports an upstream `deepmerge-ts <8` advisory through `polkadot-api`'s descript
 chain. It is not used by the browser claim code. No unverified major-version override was
 introduced; track the upstream tooling update before release.
 
-This change does not deploy a contract, publish the frontend, fund the faucet or change Ale's
-contract sources. Real proof generation, host permissions, PGAS-only transactions and live
-destination arrivals remain release checks. See [the deployment and PoP test runbook](../docs/DEPLOYMENT.md).
+Real proof generation, host permissions, PGAS-only transactions and live destination arrivals
+remain release checks. See [the deployment and PoP test runbook](../docs/DEPLOYMENT.md).

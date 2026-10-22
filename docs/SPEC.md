@@ -4,7 +4,7 @@
 (`fork/`); not deployed. This document specifies *what* is built and *why*; the results of the
 fork check and the proof spike are written back into it (sections 9 and 17). The
 [README](../README.md) documents the contract as built, its deployment and its operation.
-REQ-18 and REQ-19 are specified but not yet built; [section 18](#18-remaining-work) lists all
+REQ-19 is specified but not yet built; [section 18](#18-remaining-work) lists all
 remaining work. Facts are cited as `[Xn]` and resolved in [REFERENCES.md](REFERENCES.md); the
 context behind them is in [BACKGROUND.md](BACKGROUND.md).
 
@@ -38,11 +38,11 @@ Replace the custodial Paseo faucet backend with:
 
 1. a **faucet contract** on Paseo Asset Hub that holds PAS and pUSD (the Paseo counterpart of
    dotUSD) and pays both, in one transaction, to a recipient of the caller's choice, at most
-   once per person per epoch. Personhood is checked on chain with the `IPersonhood` precompile's
-   stateless ring-proof verification [P9] [P13]. The recipient can be on Asset Hub itself or on
-   another chain reached by XCM: People, Asset Hub Next (1500), Bulletin Next (1501) and People
-   Next System (1502) (7.9). One claim pays every enabled chain at once (REQ-18). The owner adds
-   or removes destination chains with a contract call;
+   once per person, epoch and chain. Personhood is checked on chain with the `IPersonhood`
+   precompile's stateless ring-proof verification [P9] [P13]. One claim pays the recipient on
+   Asset Hub itself and on every other enabled chain reached by XCM: People, Asset Hub Next
+   (1500), Bulletin Next (1501) and People Next System (1502) (7.9, REQ-18). The owner adds or
+   removes destination chains with a contract call;
 2. a **faucet product**: a static web app on DotNS and Bulletin that runs inside the Polkadot
    hosts, obtains the person's ring proof from the host, and submits the claim from its product
    account, paying fees in PGAS [T1] [T4].
@@ -111,9 +111,9 @@ The contract's security rests on: the `IPersonhood` precompile and the ring root
 |---|---|---|
 | REQ-01 | Funds are held by the faucet contract. No off-chain component holds a key that can move them, and no off-chain component decides eligibility. | G1. Acceptance: the product is a static bundle with no backend calls; the only privileged keys are owner and pauser. |
 | REQ-02 | A drip requires a ring proof of membership in People (full) or People Lite, for the faucet's context, verified by `IPersonhood.personhoodInfoByProof` on Paseo AH. | G2. `personhoodStatus` cannot be used on Paseo: alias binding is closed [R6] [E1]. |
-| REQ-03 | At most one drip per person per tier per epoch. The nullifier is the contextual alias returned by the proof; it is recorded before any payout. | G2. The alias is unique per person per context [P3]. The precompile keeps no nullifier [P13]. |
-| REQ-04 | The proof's `message` commits to the domain, the contract, the chain, the epoch, the destination and the recipient. The contract rebuilds `message` from the call arguments and never accepts it from the caller. | The precompile does not bind `msg.sender` [P9]. Without this, a copied proof could redirect the drip to another account or another chain. Acceptance: a valid proof replayed with another recipient, destination or epoch fails. |
-| REQ-05 | One claim pays a configured PAS amount and, where the destination supports it, a configured pUSD amount for the caller's tier, in the same transaction. If either payout fails on Asset Hub, the whole claim reverts and the nullifier is not consumed. | G3. This is how the built contract behaves; REQ-18 replaces it with per-leg payouts, where a leg that fails is skipped (D-12). Delivery to another chain is asynchronous (7.9). |
+| REQ-03 | At most one drip per person per tier per epoch on each destination. The nullifier is the contextual alias returned by the proof; it is recorded for each destination before any payout. | G2. The alias is unique per person per context [P3]. The precompile keeps no nullifier [P13]. |
+| REQ-04 | The proof's `message` commits to the domain, the contract, the chain, the epoch and the recipient. The contract rebuilds `message` from the call arguments and never accepts it from the caller. | The precompile does not bind `msg.sender` [P9]. Without this, a copied proof could redirect the drip to another account. Acceptance: a valid proof replayed with another recipient or epoch fails. |
+| REQ-05 | One claim pays, on each destination, a configured PAS amount and, where the destination supports it, a configured pUSD amount for the caller's tier, in the same transaction. A destination whose payout fails on Asset Hub is skipped and its nullifier is not consumed; a claim that pays nothing reverts. | G3, D-12. Delivery to another chain is asynchronous (7.9). |
 | REQ-06 | The recipient is a 32-byte `AccountId32` on every destination, existing or not. On Asset Hub it may be mapped to an H160 or not, Substrate or Ethereum-derived (`0xEE` form); Asset Hub is the only destination with an EVM, so it is the only one where an H160 is meaningful. | Developers bring old Substrate accounts (unmapped [S4]) and Ethereum addresses. Acceptance: SP-02 cases all receive both assets. |
 | REQ-07 | A person with no PAS can claim. The claim is a Substrate-signed `Revive.call` from the product account, payable in PGAS; it carries no value; per-claim storage is bounded. | G6. PGAS pays `Revive` calls and deposits [R4]; Ethereum-signed transactions cannot use PGAS. |
 | REQ-08 | Outflow is bounded: a global cap per epoch on the number of drips, a pause switch, and explicit withdrawals only by the owner. | Bounds the damage from sybils (section 11), host bugs and contract bugs. |
@@ -126,7 +126,7 @@ The contract's security rests on: the `IPersonhood` precompile and the ring root
 | REQ-15 | The product talks only to the host (chain access, signing, proofs). It makes no calls to any backend and embeds no secret. | G1. |
 | REQ-16 | The contract keeps a destination registry. The owner adds, updates and removes destinations with contract calls; the pauser can disable one. Only enabled destinations are paid. The launch set is Asset Hub (local), People (1004), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502). The built contract registers Asset Hub and People; the other three join after their entries are measured and they pass an arrival test (section 18). | G7. Acceptance: adding a destination makes it appear in the product with no product release; removing or disabling it stops payouts to it. |
 | REQ-17 | A destination entry holds typed fields only (section 9.2). The contract builds the XCM program for a destination from those fields; it never executes XCM bytes supplied by the owner or the caller. | Keeps every possible payout auditable: a destination entry can only move the drip amounts to the recipient on that chain. |
-| REQ-18 | One claim pays the recipient on every enabled destination at once: PAS everywhere, and pUSD where the destination takes it. A leg that cannot be paid (the faucet lacks the asset, the tier amount is below the destination's minimum, the payout fails on Asset Hub) is skipped, and the person receives the rest. | Not built yet: the built contract pays one named destination per claim, all or nothing. Supersedes the all-or-nothing choice of D-12. The proven message no longer names a destination (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; the event reports the destinations that were skipped (D-16). |
+| REQ-18 | One claim pays the recipient on every enabled destination at once: PAS everywhere, and pUSD where the destination takes it. A destination that cannot be paid (the tier's PAS is below its minimum, the faucet lacks the PAS, the payout fails on Asset Hub) is skipped, one whose pUSD cannot be paid gets PAS only, and the person receives the rest. A skipped destination can be claimed again in the same epoch. | D-12, D-16. The proven message names no destination (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; each skipped destination emits `DripSkipped` with the reason. Acceptance: `req18` in [E6]. |
 | REQ-19 | The owner keeps a whitelist of accounts. A whitelisted account requests specific PAS and pUSD amounts for a recipient on enabled destinations, without a personhood proof and without the per-person epoch limit; its total per epoch stays within a PAS cap and a pUSD cap the owner sets for it. Adding, changing and removing entries emits events. | G8. Not built yet (D-15). The cap bounds what a leaked whitelisted key can take before the owner removes it; requests stop while the faucet is paused. |
 
 ## 5. Soft requirements
@@ -220,11 +220,11 @@ contract re-checks whatever matters.
 |---|---|---|---|
 | Personhood proof | verifies it (`personhoodInfoByProof`) | obtains it from the host, tries the full key then the lite key, adds the compact length prefix (9.6) | only the verification is security relevant |
 | Context and message | rebuilds both from the call arguments (9.4, 9.5) | computes the same bytes to request the proof; cross-checks against `contextFor` and `messageFor` | the contract must never trust a caller-supplied message (REQ-04) |
-| Nullifier and caps | enforces one claim per person per epoch and the epoch cap | reads `hasClaimed` and `dripsInEpoch` to show status and countdowns before asking for a proof | enforcement is on chain; the read avoids wasted proofs |
+| Nullifier and caps | enforces one payout per person, epoch and destination, and the epoch cap | reads `hasClaimed` per destination and `dripsInEpoch` to show status and countdowns | enforcement is on chain; the read avoids wasted claims |
 | Tier | checks the proof against the requested tier | picks the tier from which key proved | |
-| Destination | checks it is registered and enabled; builds the XCM program from the typed entry (REQ-17) | renders the list from `destinations()`; carries display names and explorer links per para id | the program must not come from the caller |
-| Recipient | treats it as an opaque `AccountId32` | parses SS58 of any prefix to 32 bytes; for Asset Hub also accepts an H160 and converts it to the `0xEE` form; refuses an H160 for any other destination | parsing is formatting, not a security decision; a wrong but well-formed account only hurts its submitter |
-| Amounts and fees | applies the tier amounts and `remoteFee`; refuses amounts below `minPas` | shows the net amount per destination; may estimate fees with `XcmPaymentApi` to help the owner set `remoteFee` | |
+| Destination | pays every enabled one; builds the XCM program from the typed entry (REQ-17) | renders the list from `destinations()`; carries display names and explorer links per para id | the program must not come from the caller |
+| Recipient | treats it as an opaque `AccountId32` | parses SS58 of any prefix to 32 bytes; also accepts an H160 and converts it to the `0xEE` form, warning that only Asset Hub can use it (K-27) | parsing is formatting, not a security decision; a wrong but well-formed account only hurts its submitter |
+| Amounts and fees | applies the tier amounts and `remoteFee`; skips a destination whose `minPas` the tier's PAS does not reach | shows the net amount per destination; may estimate fees with `XcmPaymentApi` to help the owner set `remoteFee` | |
 | Pre-flight | none | dry-runs the claim on Asset Hub (`ReviveApi.call`) and, where the host can reach the destination, dry-runs the forwarded XCM there (OPT-12) | catches a rejecting destination before the person spends their claim (K-16) |
 | Fees for the claimant | none | requests PGAS through the host when the product account lacks it | |
 | Stats | emits events | aggregates events for OPT-07 | no indexer |
@@ -317,7 +317,7 @@ deployed on Paseo AH (DotNS). Precompile calls behave the same either way.
 program [S3]. Asset Hub allows any signed origin to execute, teleport and reserve-transfer
 [R19]. The contract pays the delivery fee from its own PAS (only system origins are exempt), at
 most the entry's `maxDeliveryFee`: a payout that takes more than the PAS amount plus
-`maxDeliveryFee` reverts `PayoutFailed` with the nullifier unspent [E6]. The destination's
+`maxDeliveryFee` is undone and skipped, and the destination stays claimable [E6]. The destination's
 execution fee comes out of the dripped PAS, and `RefundSurplus` returns the unspent part of
 `remoteFee` to the recipient (9.10).
 
@@ -373,12 +373,13 @@ available to people as soon as the owner adds it.
 
 **Delivery is asynchronous.** For any destination other than Asset Hub the claim succeeds once
 the message leaves Asset Hub. If the destination rejects it (untrusted reserve, fee too low,
-amount below its existential deposit) the funds are stuck there and the person's nullifier is
-already spent. That is why a destination is enabled only after an arrival test (14, SP-04), and
+amount below its existential deposit) the funds are stuck there and the person's claim on
+that destination is already spent. That is why a destination is enabled only after an arrival test (14, SP-04), and
 why the product shows a "check arrival" link to the destination's explorer.
 
-**Per-person limit.** One claim per person per epoch in total, which matches today's
-per-address quota (D-11). With REQ-18 that one claim pays every enabled destination.
+**Per-person limit.** One payout per person per epoch on each destination, which matches
+today's per-address quota (D-11). One claim pays every enabled destination; a later claim in
+the same epoch pays only the destinations still due, those skipped or added since.
 
 ## 8. Flows
 
@@ -395,33 +396,35 @@ sequenceDiagram
   participant PP as IPersonhood
 
   P->>AH: read config, destinations, balances, epoch, cap (via host provider)
-  U->>P: pick destination chain, enter recipient
+  U->>P: enter recipient
   P->>H: resourceAllocation.request(SmartContractAllowance)
   H->>AH: Pgas.claim_pgas(product account) with a ring proof
   P->>H: listRingVrfKeys("peopl.dot")
-  P->>P: message = encode(domain, contract, chain, epoch, destination, recipient)
+  P->>P: message = encode(domain, contract, chain, epoch, recipient)
   P->>H: createAccountProof(full key, {productId, Index(epoch)}, People ring, message)
   alt not a full person
     H-->>P: NotMember
     P->>H: createAccountProof(lite key, ..., People Lite ring, message)
   end
   H-->>P: proof, alias, ringIndex, ringRevision
-  P->>AH: read hasClaimed(epoch, tier, alias), dry-run the call
-  P->>H: sign Revive.call(contract, drip(tier, destination, recipient, proof, alias, ringIndex, revision))
+  P->>AH: read hasClaimed(epoch, tier, alias, id) per destination, dry-run the call
+  P->>H: sign Revive.call(contract, drip(tier, recipient, proof, alias, ringIndex, revision))
   H->>AH: submit, fee paid in PGAS
   AH->>C: drip(...)
-  C->>C: checks: not paused, tier enabled, destination enabled, cap, not claimed
+  C->>C: checks: not paused, tier enabled, cap, a destination due and fundable
   C->>C: rebuild context and message
   C->>PP: personhoodInfoByProof(request)
   PP-->>C: true
-  C->>C: record nullifier, count drip
-  alt destination is Asset Hub
-    C->>AH: XCM local deposit of PAS + pUSD to the recipient
-  else destination is another chain
-    C->>AH: XCM transfer of PAS (+ pUSD if offered) to the destination
-    AH-->>AH: message queued to the destination (asynchronous)
+  C->>C: record the destinations due, count drip
+  loop each destination due, in a call of its own
+    alt destination is Asset Hub
+      C->>AH: XCM local deposit of PAS + pUSD to the recipient
+    else destination is another chain
+      C->>AH: XCM transfer of PAS (+ pUSD if offered) to the destination
+      AH-->>AH: message queued to the destination (asynchronous)
+    end
+    C-->>P: event Dripped, or DripSkipped if the payout reverted
   end
-  C-->>P: event Dripped
   P-->>U: success, amounts, explorer links (destination explorer for arrival)
 ```
 
@@ -434,10 +437,10 @@ sequenceDiagram
   participant AH as Paseo Asset Hub
   P->>H: createAccountProof(...) for the current epoch
   H-->>P: proof, alias (same alias as earlier this epoch)
-  P->>AH: read hasClaimed(epoch, tier, alias)
-  AH-->>P: true
+  P->>AH: read hasClaimed(epoch, tier, alias, id) for each enabled destination
+  AH-->>P: true for every one
   P-->>P: show "already claimed", countdown to the next epoch start
-  Note over P,AH: Nothing is submitted. A submitted claim would revert with AlreadyClaimed.
+  Note over P,AH: Nothing is submitted. A submitted claim would revert with AlreadyClaimed.<br/>If a destination is still due (skipped, or added since), the product offers to claim it.
 ```
 
 ### 8.3 Ring roots and proof freshness
@@ -487,11 +490,16 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
   [*] --> Unclaimed
-  Unclaimed --> Rejected: paused, tier or destination disabled, cap reached, bad proof, payout failed
+  Unclaimed --> Rejected: paused, tier disabled, cap reached, nothing due or fundable, bad proof, every payout failed
   Rejected --> Unclaimed: state unchanged (revert)
-  Unclaimed --> Claimed: proof valid and payout succeeded or dispatched
+  Unclaimed --> Partly: proof valid, some destinations paid, others skipped
+  Unclaimed --> Claimed: proof valid, every destination due paid or dispatched
+  Partly --> Partly: a later claim pays some of the rest
+  Partly --> Claimed: a later claim pays the rest
+  Claimed --> Partly: the owner enables another destination
   Claimed --> Claimed: further claims revert AlreadyClaimed
   Claimed --> [*]: epoch ends
+  Partly --> [*]: epoch ends
 ```
 
 ### 8.6 Adding, disabling and removing a destination
@@ -527,7 +535,7 @@ This section fixes behaviour and formats, not code.
 |---|---|
 | `PRODUCT_ID` | the DotNS name the product is served from, for example `faucet.dot` (D-01) |
 | `EPOCH_SECONDS` | epoch length, for example 86,400 (D-03) |
-| `DOMAIN` | ASCII `paseo-faucet:v1` |
+| `DOMAIN` | ASCII `paseo-faucet:v2` |
 | Precompile addresses | `IPersonhood` `0x000000000000000000000000000000000a010000`, `ISystem` `0x0000000000000000000000000000000000000900`, XCM `0x00000000000000000000000000000000000A0000`, pUSD ERC20 `0x02FaF21d00000000000000000000000001200000` |
 
 ### 9.2 Configurable by the owner
@@ -536,8 +544,10 @@ Per tier (lite, full): `enabled`, `pas` (in plancks, a multiple of `10^8` wei so
 arises [S5]), `pusd` (base units; each destination's `minPusd` applies at claim time). Global:
 `maxDripsPerEpoch`, `paused`, `pauser`. Ownership moves in two steps (propose, accept).
 
-Destination registry: a map from destination id to the entry in 7.9, plus the ordered list of
-ids so the product can enumerate it. Launch entries, in plancks and pUSD base units:
+Destination registry: a map from destination id to the entry in 7.9, plus the list of ids in
+the order they were first registered, so the product can enumerate it. An id keeps its place
+after removal, because its index is its bit in the claim record (9.7); at most 256 ids can ever
+be registered. Launch entries, in plancks and pUSD base units:
 
 | id | Chain | `pasTransfer` | `pusdTransfer` | `remoteFee` | `maxDeliveryFee` | `minPas` | `minPusd` |
 |---|---|---|---|---|---|---|---|
@@ -571,36 +581,24 @@ Index(n) }` and the runtime's `build_product_context` [P15] [R8]. Test vectors a
 ### 9.5 Message (normative)
 
 ```
-message = DOMAIN                (15 bytes, ASCII "paseo-faucet:v1")
-       ++ contract address      (20 bytes)
-       ++ chain id              (8 bytes, u64 big-endian, 420420417 on Paseo AH)
-       ++ epoch                 (8 bytes, u64 big-endian)
-       ++ destination id        (4 bytes, u32 big-endian)
-       ++ recipient             (32 bytes, the AccountId32)
-                                 = 87 bytes
-```
-
-The chain id alone is not a unique domain on Polkadot test networks, so the contract address
-is included as well. The destination is included so a copied proof cannot send the drip to the
-same account on another chain. The product signs exactly these bytes; the contract rebuilds
-them.
-
-REQ-18 replaces this format (D-16). A claim then pays every enabled destination, so there is no
-destination to bind, and the domain's version changes so a message in one format can never
-verify as the other:
-
-```
 message = DOMAIN                (15 bytes, ASCII "paseo-faucet:v2")
        ++ contract address      (20 bytes)
-       ++ chain id              (8 bytes, u64 big-endian)
+       ++ chain id              (8 bytes, u64 big-endian, 420420417 on Paseo AH)
        ++ epoch                 (8 bytes, u64 big-endian)
        ++ recipient             (32 bytes, the AccountId32)
                                  = 83 bytes
 ```
 
-The epoch duplicates what the per-epoch context (9.4) already binds; it stays, for 8 bytes, so
-the binding does not depend on the context choice. The message never travels on chain, since
-the contract rebuilds it, so its length does not affect fees.
+The chain id alone is not a unique domain on Polkadot test networks, so the contract address
+is included as well. A claim pays every enabled destination, so there is no destination to
+bind (D-16). The epoch duplicates what the per-epoch context (9.4) already binds; it stays, for
+8 bytes, so the binding does not depend on the context choice. The product signs exactly these
+bytes; the contract rebuilds them. The message never travels on chain, so its length does not
+affect fees.
+
+The contract before REQ-18 signed `paseo-faucet:v1` with a 4-byte destination id before the
+recipient, 87 bytes. The domain's version changed with the format, so a message in one format
+can never verify as the other.
 
 ### 9.6 Proof encoding
 
@@ -617,12 +615,13 @@ all) verifies, and the raw 785 bytes make the claim revert `InvalidProof` [E7].
 
 | Operation | Who | Behaviour |
 |---|---|---|
-| `drip(tier, destination, recipient, proof, alias, ringIndex, revision)` | anyone | In order: not paused; tier enabled; destination registered and enabled; tier PAS amount at least the destination's `minPas` and, when the destination takes pUSD, tier pUSD amount at least its `minPusd`; drips this epoch below the cap; `(epoch, tier, alias)` not claimed; spendable PAS covers the tier amount plus the destination's `maxDeliveryFee`, and pUSD covers the pUSD amount; build context and message; `personhoodInfoByProof` returns true; record the nullifier and increment the epoch count; run the destination's program (9.10), which reverts `PayoutFailed` if it took more than the PAS amount plus `maxDeliveryFee`; emit `Dripped`. Any failure on Asset Hub reverts everything. Not payable: attached value reverts with empty data. |
+| `drip(tier, recipient, proof, alias, ringIndex, revision)` | anyone | A destination is *due* when it is enabled and has not paid `(epoch, tier, alias)`. In order: not paused; tier enabled; if the alias has no payout this epoch, drips this epoch below the cap; some destination due (`AlreadyClaimed`, or `NothingToPay` when the alias has no payout this epoch); some due destination fundable: tier PAS amount at least its `minPas` and spendable PAS covering the amount plus its `maxDeliveryFee` (`NothingToPay`); build context and message; `personhoodInfoByProof` returns true; record every due destination as paid and, if the alias had no payout this epoch, increment the epoch count; then pay each due destination in registry order, skipping one whose `minPas` the amount does not reach (`BelowMinimum`) or that the faucet cannot fund at that point (`InsufficientPas`), and otherwise running its program (9.10) through `payLeg`, which reverts `PayoutFailed` if it took more than the PAS amount plus `maxDeliveryFee` and is then skipped (`PayoutFailed`). A payout carries pUSD where the destination takes it, the tier amount reaches its `minPusd` and the faucet holds it. Emit `Dripped` per destination paid and `DripSkipped` per destination skipped, and clear the record of the skipped ones. If none was paid, revert `PayoutFailed`. Not payable: attached value reverts with empty data. |
+| `payLeg(entry, recipient, pas, pusd)` | the faucet only | Runs one destination's program as a separate call, so that its failure reverts only that payout. Anyone else gets `NotSelf`. |
 | `currentEpoch()`, `nextEpochStart()` | view | |
-| `contextFor(epoch)`, `messageFor(epoch, destination, recipient)` | view | Let the product and auditors check the formats against the contract itself. |
-| `hasClaimed(epoch, tier, alias)`, `dripsInEpoch(epoch)` | view | |
+| `contextFor(epoch)`, `messageFor(epoch, recipient)` | view | Let the product and auditors check the formats against the contract itself. |
+| `hasClaimed(epoch, tier, alias, id)`, `dripsInEpoch(epoch)` | view | `hasClaimed` is per destination. |
 | `tiers(tier)`, `maxDripsPerEpoch()`, `paused()`, `pauser()`, `owner()`, `pendingOwner()`, `balances()` | view | Public getters instead of a `config()` aggregate. `balances()` returns spendable PAS in plancks (the free balance minus the existential deposit) and pUSD in base units. |
-| `destinations()`, `destination(id)` | view | The registry, in order, as the product renders it. `destination(id)` returns a flat 8-field tuple, all zeros for an unknown id. |
+| `destinations()`, `destination(id)` | view | The registered entries in the order their ids were first registered, as the product renders them. `destination(id)` returns a flat 8-field tuple, all zeros for an unknown id. |
 | `setTier`, `setMaxDripsPerEpoch`, `setPauser`, `unpause` | owner | Each emits an event. |
 | `setDestination(entry)`, `removeDestination(id)` | owner | Add, update (including re-enabling) or delete a destination. |
 | `disableDestination(id)` | owner or pauser | Stops claims to one chain. |
@@ -634,38 +633,50 @@ all) verifies, and the raw 785 bytes make the claim revert `InvalidProof` [E7].
 ### 9.8 Events and errors
 
 Events: `Dripped(epoch, tier, contextAlias, destinationId, recipient, pas, pusd)` (`pas` is the
-gross amount), `TierUpdated`, `EpochCapUpdated`, `DestinationSet`, `DestinationDisabled`,
-`DestinationRemoved`, `Paused`, `Unpaused`, `PauserUpdated`, `Withdrawn(to, pas, pusd)` (`to` is
-the owner), `OwnershipTransferStarted`, `OwnershipTransferred`.
+gross amount), `DripSkipped(epoch, tier, contextAlias, destinationId, recipient, reason)`
+(`reason` is `BelowMinimum`, `InsufficientPas` or `PayoutFailed`), `TierUpdated`,
+`EpochCapUpdated`, `DestinationSet`, `DestinationDisabled`, `DestinationRemoved`, `Paused`,
+`Unpaused`, `PauserUpdated`, `Withdrawn(to, pas, pusd)` (`to` is the owner),
+`OwnershipTransferStarted`, `OwnershipTransferred`.
 
-Errors: `FaucetPaused`, `TierDisabled`, `UnknownDestination`, `DestinationNotEnabled`,
-`BelowDestinationMinimum`, `EpochCapReached`, `AlreadyClaimed`, `InsufficientPas`,
-`InsufficientPusd`, `InvalidProof`, `PayoutFailed`, `NotOwner`, `NotPauser`, `InvalidConfig`.
+Errors: `FaucetPaused`, `TierDisabled`, `UnknownDestination`, `EpochCapReached`,
+`AlreadyClaimed`, `NothingToPay`, `InvalidProof`, `PayoutFailed`, `NotOwner`, `NotPauser`,
+`NotSelf`, `InvalidConfig`.
 
-`FaucetPaused` and `DestinationNotEnabled` are named apart from the `Paused` and
-`DestinationDisabled` events, because Solidity cannot give an error and an event the same name.
-There is no `ValueNotAccepted`: `drip` is not payable. `InvalidConfig` rejects an empty
-`productId` or a zero `epochSeconds`, `setTier` for `None`, and destination entries that break
-the 7.9 rules. The alias is named `contextAlias` in `drip`, `hasClaimed` and `Dripped`, because
-`alias` is reserved in Solidity. If `weighMessage` reverts, which only an undecodable program
-causes, the claim reverts with the precompile's revert data instead of `PayoutFailed`.
+`FaucetPaused` is named apart from the `Paused` event, because Solidity cannot give an error
+and an event the same name. There is no `ValueNotAccepted`: `drip` is not payable.
+`InvalidConfig` rejects an empty `productId` or a zero `epochSeconds`, `setTier` for `None`,
+destination entries that break the 7.9 rules, and a 257th destination id. The alias is named
+`contextAlias` in `drip`, `hasClaimed`, `Dripped` and `DripSkipped`, because `alias` is reserved
+in Solidity. If `weighMessage` reverts, which only an undecodable program causes, that payout is
+skipped like any other `PayoutFailed`.
 
 ### 9.9 Expected cost of one claim
 
 | Part | Measured | Source |
 |---|---|---|
 | Proof verification | 20,089,078,000 ref time and 4,470 proof size, about 0.009 PAS | [R7], [E7] |
-| Full claim to Asset Hub | dry run 24,799,871,624 ref time and 238,759 proof size; 25,923,767,624 ref time when included; fee 84,240,636 plancks (0.0084 PAS), paid in PAS | [E7] |
-| Rejected claim (`InvalidProof`) | 21,070,241,717 ref time and 162,406 proof size, paid by the signer | [E7] |
-| Storage deposit | 26,400,000 plancks (0.00264 PAS) per `hasClaimed` slot (`DepositPerChildTrieItem` 2e7 plus 64 bytes at `DepositPerByte` 1e5), and the same once per epoch for `dripsInEpoch`: 52,800,000 on an epoch's first claim | [E7] [R23] |
+| Claim paying Asset Hub and People, without the proof check | dry run 12,698,159,195 ref time and 632,517 proof size; fee 70,960,246 plancks (0.0071 PAS), paid in PAS | [E6] `req18` |
+| Later claim paying one skipped destination (People), without the proof check | 8,348,633,036 ref time and 471,975 proof size; fee 56,654,456 plancks | [E6] `req18` |
+| Rejected claim (`InvalidProof`) | 21,763,008,689 ref time and 272,046 proof size, paid by the signer | [E6] `dripWithEmptyProof` |
+| Claim before REQ-18, one destination (Asset Hub), real proof | dry run 24,799,871,624 ref time and 238,759 proof size; 25,923,767,624 ref time when included; fee 84,240,636 plancks (0.0084 PAS) | [E7] |
+| Storage deposit | 26,400,000 plancks (0.00264 PAS) per claim record, one slot per epoch, tier and alias whatever the number of destinations (`DepositPerChildTrieItem` 2e7 plus 64 bytes at `DepositPerByte` 1e5), and the same once per epoch for `dripsInEpoch`: 52,800,000 on an epoch's first claim; a later claim of skipped destinations adds none | [E6] [E7] [R23] |
 | Payout XCM weight | 2,958,132,000 ref time on Asset Hub with pUSD; 5,005,332,000 to People | [E6] |
 | Delivery fee (other chains) | 306,150,000 plancks (0.0306 PAS) to People, paid by the contract, at most `maxDeliveryFee` | [E6] |
 | Destination execution fee | 3,168,127 plancks on People, taken from the dripped PAS | [E6] |
-| Total for the claimant | about 0.0084 PAS in fees plus 0.00264 to 0.00528 PAS of deposit; payable in PGAS (5 PGAS per PGAS claim [E1]) if SP-03 passes | [E7] |
+| Total for the claimant | for Asset Hub and People, about 0.0071 PAS in fees plus the proof check's 0.009 PAS, and 0.00264 to 0.00528 PAS of deposit; payable in PGAS (5 PGAS per PGAS claim [E1]) if SP-03 passes | [E6] [E7] |
+
+Proof size is what grows with the registry. Each contract storage read on Asset Hub is charged
+about 10 KB of proof size [R24] [S9], and a claim reads the `enabled` flag of every registered
+id and the whole entry of every destination it pays. The two-destination claim above takes
+about 6% of the 10 MiB an Asset Hub block can prove [R25] [S10], so a claim on the full launch
+set still leaves room for several claims per block.
 
 ### 9.10 XCM programs (normative structure)
 
-The contract builds one of these programs from the destination entry. The structure is
+For each destination a claim pays, the contract builds one of these programs from the entry
+and executes it through `payLeg`, a call of its own, so that a failure reverts only that
+payout [S8]. The structure is
 normative and the bytes are test vectors (REQ-11): seven golden programs in
 `contracts/test/XcmProgram.t.sol` (also in [REFERENCES.md](REFERENCES.md#computed-values)), and
 the 11 programs in `programs[]` of [E6], captured from the deployed contract and decoded by
@@ -693,12 +704,12 @@ Mixed entries (for example PAS by reserve and pUSD by teleport, a golden vector 
 |---|---|---|
 | Unsupported host | not in a host, or the host refuses the proof (`NotAllowlisted`, unsupported call) | what the faucet is, which hosts work, link to the fallback faucet (D-07) |
 | Not a person | both keys return `NotMember` | how to become a lite person in the Polkadot app; link to the fallback |
-| Ready | eligible this epoch | destination picker (enabled destinations from the contract, Asset Hub first), amounts for the tier on that destination (PAS less the destination's execution fee, which is at most `remoteFee`; pUSD only where offered), faucet balances, recipient field (an SS58 address of any prefix for every destination; for Asset Hub also a `0x` H160, converted to the `0xEE` form), "Claim" |
-| Already claimed | `hasClaimed` true | time to the next epoch |
-| Faucet empty or capped | `balances().pas` below the tier's PAS plus the destination's `maxDeliveryFee`, `balances().pusd` below the tier's pUSD, or the epoch cap reached | when the cap resets; no submission |
+| Ready | eligible this epoch | the enabled destinations from the contract, Asset Hub first, with the amounts for the tier on each (PAS less the destination's execution fee, which is at most `remoteFee`; pUSD only where offered), faucet balances, recipient field (an SS58 address of any prefix; also a `0x` H160, converted to the `0xEE` form, with a warning that only Asset Hub can use it), "Claim" |
+| Already claimed | `hasClaimed` true for every enabled destination | time to the next epoch |
+| Faucet empty or capped | the dry run reverts `NothingToPay` or `EpochCapReached` | when the cap resets; no submission |
 | Paused | `paused` | notice only |
 | In progress | after signing | broadcast, included, finalized; explorer link |
-| Done | `Dripped` seen | amounts, destination, recipient; Asset Hub explorer link, and for other chains a link to check arrival on the destination's explorer |
+| Done | `Dripped` seen | amounts per destination, recipient; Asset Hub explorer link, and for other chains a link to check arrival on the destination's explorer; for each `DripSkipped`, the reason and that it can be claimed again this epoch |
 | Failed | revert or proof rejection | the decoded error; for `InvalidProof`, one automatic retry with a fresh proof (8.3) |
 
 ### 10.2 Behaviour
@@ -758,8 +769,9 @@ supply (about 2.1e19 pUSD [E1]) is not a constraint, so the pUSD amount is a pol
 delivery fee in PAS, so each such claim costs the faucet a little more than the drip itself.
 The destination's execution fee is taken from the drip (`remoteFee`), so a person receives
 slightly less PAS there than on Asset Hub. SP-04 measured about 0.0306 PAS of delivery per drip
-to People and an execution fee of about 0.0003 PAS there [E6]. A claim passes the balance check
-only while the faucet holds the drip plus the destination's `maxDeliveryFee`.
+to People and an execution fee of about 0.0003 PAS there [E6]. A destination is paid only while
+the faucet holds the drip plus its `maxDeliveryFee`, so a claim on the five launch destinations
+takes the tier's PAS five times plus four delivery fees.
 
 ## 12. Security and risks
 
@@ -774,7 +786,7 @@ only while the faucet holds the drip plus the destination's `maxDeliveryFee`.
 | K-07 | Root changes `NETWORK_SUFFIX` [R8] | every proof fails | treat as a migration: redeploy with the new `PRODUCT_ID` |
 | K-08 | Proof against a revision AH no longer or not yet holds [R3] | `InvalidProof` | product retries with a fresh proof (8.3) |
 | K-09 | XCM payout fails or traps assets | lost drip or stuck funds | SP-02 showed a failing deposit reverts the whole call with nothing trapped [E6]; `maxDeliveryFee` bounds the delivery fee |
-| K-10 | pUSD issuer freezes the contract or the asset | pUSD leg fails | the built contract reverts the whole claim, so the nullifier stays unspent; with REQ-18 the pUSD leg is skipped and PAS is still paid; monitoring |
+| K-10 | pUSD issuer freezes the contract or the asset | every payout that carries pUSD fails | those destinations are skipped and stay claimable, and PAS-only ones are paid; the owner sets the tiers' pUSD to 0 to pay PAS everywhere; monitoring |
 | K-11 | Owner key compromise | funds withdrawn | multisig owner (D-08), balances topped up in tranches |
 | K-12 | Contract bug | funds lost | small surface, tests (section 13), review or audit (D-13), pause |
 | K-13 | Oversized inputs make claims expensive | the caller's own gas only | the precompile's length bound (9.6); the message is fixed-size and built by the contract |
@@ -786,14 +798,14 @@ only while the faucet holds the drip plus the destination's `maxDeliveryFee`.
 | K-19 | Another product obtains a proof in the faucet's context: Android shows only a one-time prompt for another product's context and does not enforce the RFC-0024 allowlist [H1] | if the person approves, that person's drip for the epoch goes to a recipient the other product chose | hosts enforce the allowlist, so only products `peopl.dot` lists can use the person key, and refuse other products' contexts (A-1, A-2); until then the loss is one drip per person who approves |
 | K-20 | The faucet product or its DotNS name is compromised (a malicious release, a name takeover) | the product asks for proofs naming the attacker's recipient, so everyone who uses it loses that epoch's drip | custody of the DotNS name and of the publishing key (D-01), reviewed releases; the drip bounds the loss per person |
 | K-21 | Fake lite persons, at 75 PAS each [R15], fill the epoch cap, which both tiers share | the faucet is closed to everyone for the rest of the epoch, full persons included, and each fake person earns its drip | a cap per tier (18), D-10 fee raise, a cap sized above the population |
-| K-22 | Anyone floods a destination's XCM queue from Asset Hub so that its delivery fee rises above `maxDeliveryFee` | built contract: claims to that destination revert `PayoutFailed`, with the nullifier unspent, until the queue clears; with REQ-18, that leg is skipped and the claim is spent | the attacker pays the same rising fee; `DeliveryFeeFactor` alert (14); the pauser disables the destination; a payout record per destination (18) |
+| K-22 | Anyone floods a destination's XCM queue from Asset Hub so that its delivery fee rises above `maxDeliveryFee` | payouts to that destination are skipped (`DripSkipped`, `PayoutFailed`) until the queue clears; the other destinations are paid, and the skipped one stays claimable for the rest of the epoch [E6] | the attacker pays the same rising fee; `DeliveryFeeFactor` alert (14); the pauser disables the destination |
 | K-23 | Paid registrations into the lite ring that is still filling rebuild it again and again | Asset Hub keeps at most 3 revisions per ring [R3], so proofs made against an older revision fail `InvalidProof` for that ring's members | the product retries with a fresh proof (8.3); the attacker pays 75 PAS per registration; `InvalidProof` rate alert (14) |
 | K-24 | A leaked whitelisted key sends many minimum-size requests to remote destinations (REQ-19) | each request costs the faucet a delivery fee that the account's cap does not count | count each request's `maxDeliveryFee` against the cap (18); the owner removes the key |
 | K-25 | REQ-18 makes one claim pay every enabled destination | farming (K-03) pays off sooner: a claim's outflow is the sum over destinations plus a delivery fee per remote one | the K-03 levers; a cap per tier (18); amounts per destination if needed |
-| K-26 | A pending claim is copied and submitted first, with the same recipient | the person's own transaction fails `AlreadyClaimed` and its fee is lost; the drip still reaches the recipient | accepted |
+| K-26 | A pending claim is copied and submitted first, with the same recipient | the person's own transaction fails `AlreadyClaimed` and its fee is lost; the drip still reaches the recipient. A copy sent with too little weight can make some payouts fail and be skipped | accepted: skipped destinations stay claimable |
 | K-27 | With REQ-18 an Ethereum-derived (`0xEE`) recipient is paid on every chain, but nobody can sign for it on chains without an EVM | the claimant's own funds are unusable there | the product warns; optionally the contract pays such a recipient on Asset Hub only (18) |
 
-K-19 to K-27 come from an abuse review of the built contract and of REQ-18 and REQ-19. No caller
+K-19 to K-27 come from an abuse review of the contract before REQ-18 and of REQ-18 and REQ-19. No caller
 can change the configuration, take funds or redirect another person's drip, and nobody claims
 more than once per key, tier and epoch. The open exposures are the denial-of-service and
 proof-acquisition paths above; their fixes are in section 18.
@@ -804,7 +816,7 @@ proof-acquisition paths above; their fixes are in section 18.
 |---|---|---|
 | Format vectors | context (9.4), message (9.5), proof prefix (9.6), XCM program bytes | contract views and product encoder match vectors computed independently (Python or papi) |
 | Unit | every rule in 9.7 and every error in 9.8, with the precompiles mocked at their addresses | full branch coverage of `drip` and admin paths |
-| Fork | Paseo AH fork with the real runtime precompiles; payout to mapped, unmapped, new and `0xEE` recipients | REQ-05, REQ-06, K-09 |
+| Fork | Paseo AH fork with the real runtime precompiles; payout to mapped, unmapped, new and `0xEE` recipients; one claim paying Asset Hub and People, a payout skipped and paid by the next claim | REQ-05, REQ-06, REQ-18, K-09, K-22 |
 | Destinations | multi-chain chopsticks fork (`fork/`: Asset Hub with People; 1500, 1501 and 1502 to add) running each program; then one canary claim per destination on Paseo | funds and, for People, pUSD credited on the destination; `remoteFee` and `minPas` recorded (K-16) |
 | Registry | add, update, disable, re-enable, remove; pauser limited to disabling | REQ-16, REQ-17 |
 | Proof end to end | real Android host, real lite and full persons on Paseo, contract on Paseo with a small balance | REQ-02 to REQ-04, 8.3 retry, K-08 |
@@ -813,12 +825,14 @@ proof-acquisition paths above; their fixes are in section 18.
 
 **Results.** The format, unit, fork and registry layers pass (`forge test`, [E6]). On the fork,
 a `PayoutFailed` revert leaves no XCM effect (`sp02.forcedFailure`), and the outflow bound
-reverts exactly one planck below the real delivery fee (`sp04[].deliveryFeeBound`). The
-nullifier rolls back with the same revert, as `test_drip_checksRunInSpecOrder` and
-`test_drip_payoutMayTakeTheAmountPlusMaxDeliveryFee` show: a drip with the same alias succeeds
-after `PayoutFailed` (REQ-05). The proof layer has passed its contract half only, on a fork
-with tool-built proofs [E7]. The host half, the cost layer in PGAS (SP-03) and the canary
-claims are open.
+reverts exactly one planck below the real delivery fee (`sp04[].deliveryFeeBound`). Inside a
+claim such a revert undoes only that destination's payout: Asset Hub was paid, the faucet spent
+exactly the Asset Hub drip, no message left for People, and the next claim paid People without
+counting against the cap again (`req18`). Its record rolls back with it, as
+`test_drip_skipsFailedPayoutsAndPaysThemOnTheNextClaim` and `test_drip_checksRunInSpecOrder`
+show (REQ-05). The proof layer has passed its contract half only, on a fork with tool-built
+proofs, against the contract before REQ-18 [E7]. The host half, the cost layer in PGAS (SP-03)
+and the canary claims are open.
 
 ## 14. Deployment and operations
 
@@ -841,7 +855,8 @@ balances and a short epoch; Paseo production deployment.
 `InvalidProof` rate; any runtime upgrade of Paseo AH, People or a registered destination;
 drips to a destination with no matching arrival there; Asset Hub's
 `XcmpQueue.DeliveryFeeFactor(id)` above 1 for any enabled destination, since a congested
-destination fails closed with `PayoutFailed` once delivery exceeds its `maxDeliveryFee`.
+destination's payouts are skipped once delivery exceeds its `maxDeliveryFee`; `DripSkipped`
+events.
 Runbooks for top-up, pause, adding and removing a destination (flow 8.6, whose first gate is
 the relay's `Paras.ParaLifecycles`) and migration to a new contract are in the README;
 incident response is still to write.
@@ -875,13 +890,13 @@ Decided:
 | Launch destinations | Asset Hub, People, Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502); the relay chain is not in the launch set |
 | Coretime and Bridge Hub | not part of the Paseo relay and out of scope |
 | Privileged origin and whitelist (D-15) | the owner is the admin: one origin for every privileged call, destinations and the whitelist included; whitelisted accounts need no personhood proof; each has an owner-set PAS cap and pUSD cap per epoch (REQ-19) |
-| Claim across destinations (D-16) | the proven message binds the `paseo-faucet:v2` domain, the contract, the chain id, the epoch and the recipient, 83 bytes (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; the event reports skipped destinations (REQ-18) |
+| Claim across destinations (D-16) | the proven message binds the `paseo-faucet:v2` domain, the contract, the chain id, the epoch and the recipient, 83 bytes (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; each skipped destination emits `DripSkipped` (REQ-18) |
 | Personhood check (D-02) | `personhoodInfoByProof` (7.1) |
 | Context (D-04) | per epoch (7.3) |
 | Payout path (D-05) | XCM, since SP-02 passed [E6] |
 | Toolchain (D-09) | Solidity to EVM bytecode with Foundry |
-| Per-person limit (D-11) | one claim per person per epoch in total |
-| Payout atomicity (D-12) | pay what is available, on every enabled destination at once (REQ-18); the built contract is all or nothing until REQ-18 lands |
+| Per-person limit (D-11) | one payout per person per epoch on each destination; one claim pays them all |
+| Payout atomicity (D-12) | pay what is available, on every enabled destination at once (REQ-18); a skipped destination stays claimable for the rest of the epoch |
 | Managing destinations | the owner adds and removes them with contract calls (REQ-16) |
 | Account format | `AccountId32` everywhere; H160 only on Asset Hub, the only chain with an EVM |
 | pUSD | dripped on Asset Hub, People, Asset Hub Next (1500) and People Next System (1502); Bulletin Next (1501) gets PAS only (7.9) |
@@ -903,7 +918,8 @@ Spikes (each a throwaway experiment whose result is written back into this spec)
 Go / no-go for launch:
 
 - [ ] D-01, D-03, D-06 to D-08 and D-10 decided
-- [ ] REQ-18 and REQ-19 built and verified (section 18)
+- [x] REQ-18 built and verified on the fork [E6]
+- [ ] REQ-19 built and verified (section 18)
 - [x] SP-02, and SP-04 for People, passed and folded into sections 7 and 9
 - [ ] SP-01 (host half) and SP-03 passed
 - [ ] A canary claim to every enabled destination has arrived
@@ -919,51 +935,44 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
 
 **Contract**
 
-1. **One claim pays every enabled destination (REQ-18).** Change `drip`, move the message to the
-   83-byte `paseo-faucet:v2` format (9.5) with new vectors, report skipped destinations in the
-   event, and extend the fork check. Each leg is skipped rather than reverted when it cannot be
-   paid; a claim that pays nothing reverts.
-2. **Whitelist (REQ-19).** Add the owner-managed whitelist with a PAS cap and a pUSD cap per
+1. **Whitelist (REQ-19).** Add the owner-managed whitelist with a PAS cap and a pUSD cap per
    account per epoch, the request call, their events and tests.
-3. **Destinations 1500, 1501 and 1502.** Check each is registered on the relay, determine its
+2. **Destinations 1500, 1501 and 1502.** Check each is registered on the relay, determine its
    PAS transfer kind and, for Asset Hub Next and People Next System, how they receive pUSD
    (Bulletin Next gets PAS only), measure `remoteFee`, `maxDeliveryFee`, `minPas` and `minPusd`
    on a fork, add it to `launch()` in `contracts/script/Deploy.s.sol` and to the fork check,
    then pass a live arrival test (8.6).
-4. **CI.** Run `forge fmt --check`, `forge build`, `forge lint` and `forge test` on every pull
+3. **CI.** Run `forge fmt --check`, `forge build`, `forge lint` and `forge test` on every pull
    request.
 
 **Product**
 
-5. **The faucet product (section 10)**, as its own change, on the `product-sdk` line the target
+4. **The faucet product (section 10)**, as its own change, on the `product-sdk` line the target
    hosts speak [T7].
 
 **Spikes**
 
-6. **SP-01, host half.** A proof from a real Android host for `{ productId, Index(epoch) }` and
-   the message, accepted on live Paseo Asset Hub for a lite and a full person.
-7. **SP-03.** A product account holding only PGAS pays a full claim, fee and storage deposit.
+5. **SP-01, host half.** A proof from a real Android host for `{ productId, Index(epoch) }` and
+   the 83-byte message, accepted on live Paseo Asset Hub for a lite and a full person.
+6. **SP-03.** A product account holding only PGAS pays a full claim, fee and storage deposit.
 
 **Launch**
 
-8. The open decisions in section 16 and the asks in section 15.
-9. A canary deployment with small balances and a short epoch, and a canary claim that arrives on
+7. The open decisions in section 16 and the asks in section 15.
+8. A canary deployment with small balances and a short epoch, and a canary claim that arrives on
    every enabled destination.
-10. The external review (D-13), then the production deployment and the rest of the launch
-    sequence (14), including an incident-response runbook.
+9. The external review (D-13), then the production deployment and the rest of the launch
+   sequence (14), including an incident-response runbook.
 
 **Hardening** (from risks K-19 to K-27; fold each into the contract or product work above as it
 is built)
 
-11. **A cap per tier** (K-21, K-25). `maxDripsPerEpoch` and `dripsInEpoch` become per tier, so
+10. **A cap per tier** (K-21, K-25). `maxDripsPerEpoch` and `dripsInEpoch` become per tier, so
     lite claims cannot use up the full tier's slots. This changes REQ-08's single cap.
-12. **A payout record per destination** (K-22), with REQ-18. Record which destinations a claim
-    paid, so a second claim in the same epoch pays only the destinations that were skipped. Each
-    paid destination adds one storage item, about 0.00264 PAS of deposit in PGAS (9.9).
-13. **Delivery fees count against a whitelisted account's cap** (K-24), with REQ-19.
-14. **`0xEE` recipients** (K-27). The product warns; decide whether the contract pays such a
+11. **Delivery fees count against a whitelisted account's cap** (K-24), with REQ-19.
+12. **`0xEE` recipients** (K-27). The product warns; decide whether the contract pays such a
     recipient on Asset Hub only.
-15. **Host behaviour** (K-19). Hosts enforce the RFC-0024 allowlist and refuse proofs in another
+13. **Host behaviour** (K-19). Hosts enforce the RFC-0024 allowlist and refuse proofs in another
     product's context; track it with A-1 and A-2.
-16. **Product release process** (K-20). Custody of the DotNS name and the publishing key, and
+14. **Product release process** (K-20). Custody of the DotNS name and the publishing key, and
     reviewed releases, before launch.

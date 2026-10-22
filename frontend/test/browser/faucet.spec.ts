@@ -1,40 +1,45 @@
 import { expect, test } from '@playwright/test';
 
-test('Paseo-only landing page has exactly the requested chain choices and honest setup state', async ({ page }) => {
+test('Paseo-only landing page has no chain picker and an honest setup state', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Testnet Faucet', exact: true })).toBeVisible();
-  await expect(page.locator('#chain option')).toHaveText(['Paseo Relay', 'Asset Hub', 'People', 'Bulletin', 'Asset Hub Next', 'Bulletin Next', 'People Next']);
+  await expect(page.locator('select')).toHaveCount(0);
+  await expect(page.locator('#payout-summary')).toBeHidden();
   await expect(page.locator('#claim')).toBeDisabled();
   await expect(page.locator('#notice')).toContainText('contract is deployed');
   await page.getByRole('button', { name: 'Connect Polkadot app' }).click();
   await expect(page.locator('#notice')).toContainText('not been deployed');
   await expect(page.locator('#connection-label')).toHaveText('Not connected');
+  await expect(page.locator('#connection-label')).toBeDisabled();
   expect(errors).toEqual([]);
 });
 
-test('address errors update when the destination changes', async ({ page }) => {
+test('an Ethereum recipient is warned that only Asset Hub can use it, an invalid one is refused', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Paseo address').fill('0x1234567890123456789012345678901234567890');
+  await page.getByLabel('Beneficiary').fill('0x1234567890123456789012345678901234567890');
+  await expect(page.locator('#address-error')).toContainText('Only Asset Hub');
+  await page.getByLabel('Beneficiary').fill('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
   await expect(page.locator('#address-error')).toBeHidden();
-  await page.getByLabel('Chain', { exact: true }).selectOption('1004');
-  await expect(page.locator('#address-error')).toContainText('only on Asset Hub');
-  await page.getByLabel('Paseo address').fill('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
-  await expect(page.locator('#address-error')).toBeHidden();
+  await page.getByLabel('Beneficiary').fill('not-an-address');
+  await expect(page.locator('#address-error')).toContainText('valid Substrate');
   await expect(page.locator('#claim')).toBeDisabled();
 });
 
-test('query parameters support deep links without adding other networks', async ({ page }) => {
-  for (const bulletin of ['1010', '1501']) {
-    await page.goto(`/?parachain=${bulletin}`);
-    await expect(page.getByLabel('Chain', { exact: true })).toHaveValue(bulletin);
+test('the address query parameter prefills the recipient; a chain parameter is ignored', async ({ page }) => {
+  await page.goto('/?parachain=1004&address=test-address');
+  await expect(page.getByLabel('Beneficiary')).toHaveValue('test-address');
+  await expect(page.locator('select')).toHaveCount(0);
+});
+
+test('the FAQ tables show the faucet configuration without connecting', async ({ page }) => {
+  await page.goto('/');
+  for (const question of ['Why do I need proof of personhood?', 'Which chains are paid?']) {
+    await page.getByText(question, { exact: true }).click();
   }
-  await page.goto('/?parachain=1502&address=test-address');
-  await expect(page.getByLabel('Chain', { exact: true })).toHaveValue('1502');
-  await expect(page.getByLabel('Paseo address')).toHaveValue('test-address');
-  await page.goto('/?parachain=1002');
-  await expect(page.getByLabel('Chain', { exact: true })).toHaveValue('1000');
+  await expect(page.locator('.faq-table table')).toHaveCount(2);
+  await expect(page.locator('.faq-table').nth(1).locator('tbody th')).toHaveText(['Asset Hub', 'People', 'Bulletin', 'Asset Hub Next', 'People Next', 'Bulletin Next']);
 });
 
 test('mobile layout is accessible and does not overflow', async ({ page }) => {

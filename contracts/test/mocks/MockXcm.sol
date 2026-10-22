@@ -4,23 +4,32 @@ pragma solidity ^0.8.30;
 import {Vm} from "forge-std/Vm.sol";
 import {IXcm} from "../../src/interfaces/IXcm.sol";
 
-/// @notice Records the last executed program. `setFails(true)` makes execution revert; `setOutflow(amount)` makes it
-///         take `amount` wei from the caller, as the executor takes the assets and the delivery fee. Unlike the real
-///         withdrawal, that balance change survives a revert.
+/// @notice Records every executed program. `setFails(program, true)` makes executing that program revert;
+///         `setOutflow(amount)` makes each execution take `amount` wei from the caller, as the executor takes the
+///         assets and the delivery fee. Unlike the real withdrawal, that balance change survives a revert.
 contract MockXcm {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    bytes public lastMessage;
-    IXcm.Weight public lastWeight;
-    bool public fails;
+    bytes[] private _messages;
+    IXcm.Weight[] private _weights;
+    mapping(bytes32 messageHash => bool) public fails;
     uint256 public outflow;
 
-    function setFails(bool fails_) external {
-        fails = fails_;
+    function setFails(bytes calldata message, bool fails_) external {
+        fails[keccak256(message)] = fails_;
     }
 
     function setOutflow(uint256 outflow_) external {
         outflow = outflow_;
+    }
+
+    function clear() external {
+        delete _messages;
+        delete _weights;
+    }
+
+    function executed() external view returns (bytes[] memory messages, IXcm.Weight[] memory weights) {
+        return (_messages, _weights);
     }
 
     function weighMessage(bytes calldata message) external pure returns (IXcm.Weight memory) {
@@ -28,9 +37,9 @@ contract MockXcm {
     }
 
     function execute(bytes calldata message, IXcm.Weight calldata weight) external {
-        require(!fails, "MockXcm: execution failed");
-        lastMessage = message;
-        lastWeight = weight;
+        require(!fails[keccak256(message)], "MockXcm: execution failed");
+        _messages.push(message);
+        _weights.push(weight);
         VM.deal(msg.sender, msg.sender.balance - outflow);
     }
 }

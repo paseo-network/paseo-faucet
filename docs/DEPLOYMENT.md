@@ -1,10 +1,10 @@
 # Deploy and test the Paseo faucet
 
-This runbook deploys the existing **v1, single-destination** contract and the frontend
-as a Polkadot product on **public Paseo**. It does not implement the planned whitelist
-or a claim paying every chain. Only Asset Hub (1000) and People (1004) are configured
-by `contracts/script/Deploy.s.sol`; the other five UI choices are unavailable until
-configured and tested separately.
+This runbook deploys the contract and the frontend as a Polkadot product on **public
+Paseo**. One claim pays every enabled destination. `contracts/script/Deploy.s.sol`
+registers Asset Hub (1000) and People (1004); other chains are added with
+`setDestination` once measured and tested ([Adding a destination](../README.md#adding-a-destination)).
+The whitelist (REQ-19) is not built yet.
 
 Start with a canary, using small balances. A successful build or simulated claim is
 not evidence of a real host proof or remote token arrival.
@@ -19,7 +19,7 @@ not evidence of a real host proof or remote token arrival.
 | Asset Hub genesis | `0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2` |
 | People genesis | `0xe6c30d6e148f250b887105237bcaa5cb9f16dd203bf7b5b9d4f1da7387cb86ec` |
 | SDK descriptor | `devnet_asset_hub`, checked against that genesis |
-| Contract domain | `paseo-faucet:v1` |
+| Contract domain | `paseo-faucet:v2` |
 
 The current Apps documentation targets **Paseo Next v2**, with `.paseo` names and
 a different genesis. Its default publishing commands do not target this contract
@@ -148,10 +148,11 @@ and destination measurements. Fork checks and SDK test doubles do not generate
 a real user's PoP proof. See the [full contract preflight](../README.md#pre-flight-checks)
 for the precompile checks and reference context vector.
 
-## 4. Deploy a canary contract
+## 4. Deploy and fund a canary contract
 
-In the same shell, set your chosen addresses. `OWNER` and `PAUSER` are H160 values;
-a Substrate owner's H160 must come from its mapped `ReviveApi.address`.
+Deploy, verify, hand over ownership and fund the contract with the
+[contract deployment runbook](../README.md#calls), steps 1 to 7, in the same shell
+(`PRODUCT_ID` is already set) and with canary values:
 
 ```sh
 export RPC=https://eth-rpc-testnet.polkadot.io
@@ -166,86 +167,24 @@ export LITE_PUSD=100000          # 0.1 pUSD (6 decimals)
 export FULL_PUSD=200000          # 0.2 pUSD
 ```
 
-These are canary examples, not production budgets. The script enables both tiers
-and registers Asset Hub and People. Both destinations require pUSD, so a PAS-only
-funded faucet cannot serve this configuration.
+These are canary examples, not production budgets. The script enables both tiers and
+registers Asset Hub and People, so one claim pays both: it needs the tier's PAS twice,
+People's `maxDeliveryFee` (0.5 PAS) of delivery headroom, and the tier's pUSD twice. A
+chain the faucet cannot fund is skipped (`DripSkipped`), and pUSD it lacks is left out.
+Fund about 100 PAS and 10 pUSD rather than the runbook's 1,000 of each, and export the
+deployed address as `FAUCET`.
 
-Import the deployer into Foundry's encrypted keystore, simulate, then broadcast
-only after reviewing the output and estimated required balance:
-
-```sh
-cd contracts
-cast wallet import deployer --interactive
-forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC" --account deployer
-forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC" --account deployer --broadcast --slow
-export FAUCET=0x_REPLACE_WITH_PRINTED_CONTRACT_ADDRESS
-```
-
-The script prints the address and writes
-`broadcast/Deploy.s.sol/420420417/run-latest.json`. Deploying costs PAS for fees
-and storage. To fund an Ethereum deployer from a Substrate wallet, its AccountId32
-is its H160 followed by twelve `EE` bytes.
-
-Verify the source and complete the ownership handover:
+Then run the runbook's [verification](../README.md#verification) calls, plus:
 
 ```sh
-forge verify-contract "$FAUCET" src/PaseoFaucet.sol:PaseoFaucet \
-  --chain 420420417 --verifier blockscout \
-  --verifier-url https://blockscout-testnet.polkadot.io/api/ \
-  --constructor-args "$(cast abi-encode 'constructor(string,uint64)' "$PRODUCT_ID" "$EPOCH_SECONDS")" \
-  --watch
-# Import the key for OWNER separately if it is an Ethereum account:
-cast wallet import owner --interactive
-cast send "$FAUCET" 'acceptOwnership()' --rpc-url "$RPC" --account owner
-```
-
-For a Substrate/multisig owner, use the `Revive.call` handover instructions in
-the [contract deployment runbook](../README.md#calls) instead of importing an
-Ethereum owner key.
-
-## 5. Fund and verify the contract
-
-Import a funded Ethereum account as `funder`, or use Substrate transfers as
-described below. With the sample canary amounts:
-
-```sh
-cast wallet import funder --interactive
-cast send "$FAUCET" --value 100ether --rpc-url "$RPC" --account funder
-cast send 0x02FaF21d00000000000000000000000001200000 \
-  'transfer(address,uint256)' "$FAUCET" 10000000 --rpc-url "$RPC" --account funder
-```
-
-`100ether` in this Ethereum RPC means 100 PAS. The ERC20 transfer above sends
-10 pUSD. Check the transfer receipt and actual balances; submission alone does
-not prove a token transfer succeeded.
-
-Alternatively, send native PAS using `Balances.transfer_keep_alive` to the
-contract's H160 plus twelve `EE` bytes, and pUSD using
-`Assets.transfer(50000413, contractAccountId32, amount)`. The pUSD issuer can mint
-to that account. PGAS covers supported user transaction fees; it does not fund
-the faucet's PAS/pUSD payouts or remote delivery fees.
-
-```sh
-cast call "$FAUCET" 'owner()(address)' --rpc-url "$RPC"
-cast call "$FAUCET" 'pendingOwner()(address)' --rpc-url "$RPC"
-cast call "$FAUCET" 'pauser()(address)' --rpc-url "$RPC"
-cast call "$FAUCET" 'paused()(bool)' --rpc-url "$RPC"
-cast call "$FAUCET" 'productId()(string)' --rpc-url "$RPC"
-cast call "$FAUCET" 'DOMAIN()(bytes15)' --rpc-url "$RPC"
-cast call "$FAUCET" 'epochSeconds()(uint64)' --rpc-url "$RPC"
-cast call "$FAUCET" 'maxDripsPerEpoch()(uint32)' --rpc-url "$RPC"
-cast call "$FAUCET" 'tiers(uint8)(bool,uint128,uint128)' 1 --rpc-url "$RPC"
-cast call "$FAUCET" 'tiers(uint8)(bool,uint128,uint128)' 2 --rpc-url "$RPC"
-cast call "$FAUCET" 'destinations()((uint32,bool,uint8,uint8,uint128,uint128,uint128,uint128)[])' --rpc-url "$RPC"
-cast call "$FAUCET" 'balances()(uint256,uint256)' --rpc-url "$RPC"
-cd ..
+cast call "$FAUCET" 'DOMAIN()(bytes15)' --rpc-url "$RPC"  # 0x706173656f2d6661756365743a7632
 ```
 
 Expect the configured owner and pauser, no pending owner, `paused=false`, the exact
-product ID, domain `paseo-faucet:v1`, configured tier amounts/cap/epoch, enabled
-destinations 1000 and 1004, and enough balances for payouts plus delivery fees.
+product ID, domain `paseo-faucet:v2`, the configured tier amounts, cap and epoch,
+enabled destinations 1000 and 1004, and balances that cover payouts plus delivery fees.
 
-## 6. Build and publish the frontend to Bulletin + DotNS
+## 5. Build and publish the frontend to Bulletin + DotNS
 
 From the repository root in the same shell:
 
@@ -293,7 +232,7 @@ chain genesis, contract address, build commit and new CID. Confirm the network's
 Bulletin retention/renewal policy with its operator; a DotNS record alone does
 not keep uploaded content available indefinitely.
 
-## 7. Test a real proof of personhood claim
+## 6. Test a real proof of personhood claim
 
 ### Get a compatible PoP identity
 
@@ -314,55 +253,59 @@ People genesis and the 32-byte, space-padded collection ID for either
 `pop:polkadot.network/people` (full, tier 2) or
 `pop:polkadot.network/people-lite` (lite, tier 1).
 
-### First claim on Asset Hub
+### First claim
 
-1. Record recipient balances on Asset Hub, the current epoch, and
+1. Record the recipient's balances on Asset Hub and on People, the current epoch, and
    `dripsInEpoch(epoch)`. Use a Substrate recipient address for easy comparison.
 2. Open the published product **inside the compatible host**, click **Connect
    Polkadot app**, and approve the requested account/chain permissions.
-3. Select **Asset Hub**, enter the recipient, and click **Get some PAS**.
+3. Enter the recipient, check the amounts listed for Asset Hub and People, and click
+   **Get some PAS**.
 4. Approve the personhood and transaction prompts. The app obtains the contract's
-   `contextFor(epoch)` and `messageFor(epoch, destination, recipient)`, asks the
-   host for a Ring-VRF proof, checks its contextual alias, dry-runs `drip`, then
-   submits with **zero native value**. Full is preferred; Lite can be used when
-   full membership is missing or its alias already claimed.
-5. Wait for finality and follow the transaction link. Check successful execution
-   and the contract's `Dripped` event, with destination `1000` and the intended
-   recipient, tier and amounts. Verify recipient PAS and pUSD balance increases.
+   `contextFor(epoch)` and `messageFor(epoch, recipient)`, asks the host for a Ring-VRF
+   proof, checks its contextual alias, dry-runs `drip`, then submits with **zero native
+   value**. Full is preferred; Lite can be used when full membership is missing or its
+   alias has nothing left to claim.
+5. Wait for finality and follow the transaction link. Check successful execution and
+   one `Dripped` event per enabled destination, `1000` and `1004`, with the intended
+   recipient, tier and amounts, and no `DripSkipped`. Verify the recipient's PAS and pUSD
+   increase on Asset Hub, and on People (PAS, and pUSD in its Digital Dollar asset) once
+   the transfer arrives. People's PAS can be smaller than the drip because its execution
+   fee is deducted; Asset Hub finality confirms dispatch, not arrival.
 
 Use `cast receipt TX_HASH --rpc-url "$RPC"` for an Ethereum transaction hash.
 The host may instead provide a Substrate extrinsic hash; inspect it in the
 Asset Hub explorer rather than passing it to the Ethereum receipt method.
 
-### Verify the quota and remote payout
+### Verify the quota
 
-Read the alias and tier from the `Dripped` event (no private identity material is
+Read the alias and tier from a `Dripped` event (no private identity material is
 needed) and query:
 
 ```sh
 export CLAIM_EPOCH=REPLACE_WITH_EVENT_EPOCH
 export CLAIM_TIER=REPLACE_WITH_EVENT_TIER
 export CLAIM_ALIAS=0x_REPLACE_WITH_EVENT_ALIAS
-cast call "$FAUCET" 'hasClaimed(uint64,uint8,bytes32)(bool)' \
-  "$CLAIM_EPOCH" "$CLAIM_TIER" "$CLAIM_ALIAS" --rpc-url "$RPC"
+for id in 1000 1004; do
+  cast call "$FAUCET" 'hasClaimed(uint64,uint8,bytes32,uint32)(bool)' \
+    "$CLAIM_EPOCH" "$CLAIM_TIER" "$CLAIM_ALIAS" "$id" --rpc-url "$RPC"
+done
 cast call "$FAUCET" 'dripsInEpoch(uint64)(uint32)' "$CLAIM_EPOCH" --rpc-url "$RPC"
 cast call "$FAUCET" 'nextEpochStart()(uint64)' --rpc-url "$RPC"
 ```
 
-Expect `hasClaimed=true`. The count should increase for each successful claim;
-other users may also be claiming. The quota is per **epoch, tier and alias**, not
-per destination or wallet. A second attempt using the same tier and alias in the
-same epoch must fail. A full+lite identity can legitimately make another claim
-through its unused Lite tier; use a Lite-only identity to test the duplicate
-rejection unambiguously. Changing only the recipient does not reset the quota.
+Expect `hasClaimed=true` for both chains. The count rises once per person and epoch;
+other users may also be claiming. The quota is per **epoch, tier, alias and
+destination**, not per wallet. A second attempt using the same tier and alias in the
+same epoch must fail with `AlreadyClaimed`. A full+lite identity can legitimately make
+another claim through its unused Lite tier; use a Lite-only identity to test the
+duplicate rejection unambiguously. Changing only the recipient does not reset the quota.
 
-For People, wait for a new epoch, use a different eligible identity, or use an
-unused tier. Record balances **on People**, choose **People**, and claim to a
-Substrate recipient. Check `Dripped` on Asset Hub with destination `1004`, then
-verify PAS and pUSD (the destination's Digital Dollar asset) on People. PAS arrival
-can be smaller than the configured drip because remote execution costs are
-deducted. Asset Hub finality confirms dispatch; it does not confirm People arrival.
-An Ethereum-derived account with an `EE` suffix is rejected for remote payouts.
+Optionally, check a skipped destination on the canary. The owner sets People's
+`maxDeliveryFee` to 1 plank with `setDestination`, and a new identity (or a new epoch)
+claims: Asset Hub is paid, the event list has `DripSkipped` for `1004` with reason
+`PayoutFailed` (3), and nothing arrives on People. The owner restores the entry, the
+same identity claims again in the same epoch, and only People is paid.
 
 Repeat with a Lite identity and a full identity, and with a newly created product
 account holding **zero PAS**. For the latter, confirm PGAS allocation precedes
@@ -379,8 +322,8 @@ claim hashes. If any of these steps fail, the canary has not passed.
 | Unsupported network | Compare genesis values; RPC overrides do not migrate DotNS contracts or PoP identities |
 | No supported key / permission denied | Matching People collection, actual membership, `peopl.dot` access policy |
 | Invalid proof | Matching context/message, ring revision and root propagation; frontend regenerates once before submission |
-| Already claimed | Alias/tier/epoch quota; wait for `nextEpochStart`, not another wallet address |
-| Insufficient PAS/pUSD | Fund the contract, including delivery-fee headroom; PGAS is not payout liquidity |
+| Already claimed | Every enabled destination has paid this alias, tier and epoch; wait for `nextEpochStart`, not another wallet address |
+| `DripSkipped` | `InsufficientPas`: fund the contract, including delivery-fee headroom; PGAS is not payout liquidity. `BelowMinimum`: the tier's PAS is below that chain's `minPas`. `PayoutFailed`: XCM failed or delivery exceeded `maxDeliveryFee`; the chain stays claimable this epoch |
 | Mapping or fee allocation fails | Host PGAS allowance and support for a fresh zero-PAS account; do not mark the zero-PAS test passed |
 | People dispatch succeeds but funds missing | Inspect destination XCM execution and balances before retrying |
 | Transaction outcome uncertain | Inspect finality/events/balances; never blindly resubmit |
