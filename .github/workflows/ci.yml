@@ -1,0 +1,110 @@
+name: CI
+
+# Checks every pull request and every push to main: the contracts (format, build, lint, tests and
+# full coverage of src/), the frontend (ABI in sync with the contract, unit tests, build, browser
+# tests) and the fork check's types. The fork check itself runs in fork-check.yml.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.8.5
+
+      - run: forge fmt --check
+      - run: forge build
+      - run: forge lint --deny warnings
+      - run: forge test
+
+      - name: Require full coverage of src/
+        run: |
+          forge coverage --report summary --no-match-coverage '(script|test)' | tee coverage.txt
+          awk -F'|' '
+            $2 ~ /src\// {
+              rows++
+              for (i = 3; i <= 6; i++) if ($i !~ /100\.00%/) { print "::error::not fully covered:" $2; bad = 1 }
+            }
+            END { if (!rows) { print "::error::no src/ rows in the coverage report"; exit 1 } exit bad }
+          ' coverage.txt
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.8.5
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Require the ABI of the contract
+        run: |
+          forge build --root ../contracts
+          npm run abi
+          if ! git diff --exit-code -- src/faucet.abi.json; then
+            echo "::error file=frontend/src/faucet.abi.json::stale ABI: build the contracts, then run npm run abi"
+            exit 1
+          fi
+
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+
+  fork:
+    name: Fork check types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: fork
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: fork/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck

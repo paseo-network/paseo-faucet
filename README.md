@@ -384,14 +384,15 @@ docs/
 
 ## Build and test
 
-Requirements: Foundry (`forge`, `cast`); `foundry.toml` pins solc 0.8.34, which forge fetches.
+Requirements: Foundry v1.8.5, the version CI uses (`foundryup --install v1.8.5`); `foundry.toml`
+pins solc 0.8.34, which forge fetches.
 
 ```sh
 git submodule update --init
 cd contracts
 forge build
 forge test
-forge fmt --check && forge lint
+forge fmt --check && forge lint --deny warnings
 forge coverage --report summary
 ```
 
@@ -400,6 +401,21 @@ destinations, every error and event, the registry, the roles,
 two-step ownership, withdrawals, epoch boundaries, the context and message vectors (a mock
 `ISystem` computes real BLAKE2b), the golden programs, a fuzzed compact encoder, and the deploy
 script. Coverage of `src/` is complete for lines and branches.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`:
+
+| Job | Checks |
+|---|---|
+| Contracts | `forge fmt --check`, `forge build`, `forge lint --deny warnings`, `forge test`, and full line, statement, branch and function coverage of `src/` |
+| Frontend | the committed `frontend/src/faucet.abi.json` equals the contract's ABI, unit tests, build (with `tsc`), browser tests |
+| Fork check types | `npm run typecheck` in `fork/` |
+
+`.github/workflows/fork-check.yml` runs the [fork check](#fork-check) when a pull request changes
+`contracts/` or `fork/`, every Monday to catch Paseo runtime upgrades, and on demand, and keeps
+`fork-check.json` as an artifact. It depends on public Paseo RPC endpoints, so it is not a
+required check. Neither workflow holds a secret or writes to the repository.
 
 ## Fork check
 
@@ -725,20 +741,18 @@ with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
 2. **Destinations 1500, 1501 and 1502.** Asset Hub Next and People Next System receive PAS and
    pUSD, Bulletin Next PAS only: determine their transfer kinds, measure their entries on a
    fork, add them to `launch()` and to the fork check, then pass a live arrival test.
-3. **CI** that runs `forge fmt --check`, `forge build`, `forge lint` and `forge test` on every
-   pull request.
-4. **The faucet product** ([SPEC section 10](docs/SPEC.md#10-product-specification)). A candidate
+3. **The faucet product** ([SPEC section 10](docs/SPEC.md#10-product-specification)). A candidate
    frontend now lives in `frontend/`; deployment configuration and real-host end-to-end checks
    remain, followed by publication through DotNS/Bulletin.
-5. **SP-01, host half.** A proof produced by a real host (Android, TrUAPI `createAccountProof`)
+4. **SP-01, host half.** A proof produced by a real host (Android, TrUAPI `createAccountProof`)
    for `{ productId, Index(epoch) }` and the 83-byte message, accepted on live Paseo Asset Hub
    for a lite and a full person.
-6. **SP-03.** A product account holding only PGAS pays a full claim, fee and storage deposit.
-7. **Launch:** the open decisions below and the asks in
+5. **SP-03.** A product account holding only PGAS pays a full claim, fee and storage deposit.
+6. **Launch:** the open decisions below and the asks in
    [SPEC section 15](docs/SPEC.md#15-dependencies-and-asks); a canary deployment with a claim
    that arrives on every enabled destination; the external review (D-13); then the production
    deployment and an incident-response runbook.
-8. **Hardening** from an abuse review ([SPEC section 12](docs/SPEC.md#12-security-and-risks),
+7. **Hardening** from an abuse review ([SPEC section 12](docs/SPEC.md#12-security-and-risks),
    K-19 to K-27), folded into the work above as it is built:
    - a cap per tier, so fake lite persons cannot fill the epoch cap for full persons too;
    - delivery fees counted against a whitelisted account's cap;
