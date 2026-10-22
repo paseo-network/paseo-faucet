@@ -1,0 +1,57 @@
+name: Fork check
+
+# Runs the contract against chopsticks forks of the live Paseo chains (fork/check.ts): when the
+# contracts or the check change, weekly to catch Paseo runtime upgrades, and on demand. It reaches
+# public Paseo RPC endpoints, so it is not a required check; the evidence it writes is kept as an
+# artifact.
+on:
+  pull_request:
+    paths:
+      - contracts/**
+      - fork/**
+      - .github/workflows/fork-check.yml
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fork-check:
+    name: Fork check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: fork
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.8.5
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: fork/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: fork-check
+          path: docs/evidence/fork-check.json
+          if-no-files-found: ignore
+          retention-days: 30

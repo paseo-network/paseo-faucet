@@ -942,37 +942,35 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
    (Bulletin Next gets PAS only), measure `remoteFee`, `maxDeliveryFee`, `minPas` and `minPusd`
    on a fork, add it to `launch()` in `contracts/script/Deploy.s.sol` and to the fork check,
    then pass a live arrival test (8.6).
-3. **CI.** Run `forge fmt --check`, `forge build`, `forge lint` and `forge test` on every pull
-   request.
 
 **Product**
 
-4. **The faucet product (section 10)**, as its own change, on the `product-sdk` line the target
+3. **The faucet product (section 10)**, as its own change, on the `product-sdk` line the target
    hosts speak [T7].
 
 **Spikes**
 
-5. **SP-01, host half.** A proof from a real Android host for `{ productId, Index(epoch) }` and
+4. **SP-01, host half.** A proof from a real Android host for `{ productId, Index(epoch) }` and
    the 83-byte message, accepted on live Paseo Asset Hub for a lite and a full person.
-6. **SP-03.** A product account holding only PGAS pays a full claim, fee and storage deposit.
+5. **SP-03.** A product account holding only PGAS pays a full claim, fee and storage deposit.
 
 **Launch**
 
-7. The open decisions in section 16 and the asks in section 15.
-8. A canary deployment with small balances and a short epoch, and a canary claim that arrives on
+6. The open decisions in section 16 and the asks in section 15.
+7. A canary deployment with small balances and a short epoch, and a canary claim that arrives on
    every enabled destination.
-9. The external review (D-13), then the production deployment and the rest of the launch
+8. The external review (D-13), then the production deployment and the rest of the launch
    sequence (14), including an incident-response runbook.
 
 **Hardening** (from risks K-19 to K-27; fold each into the contract or product work above as it
 is built)
 
-10. **A cap per tier** (K-21, K-25). `maxDripsPerEpoch` and `dripsInEpoch` become per tier, so
+9. **A cap per tier** (K-21, K-25). `maxDripsPerEpoch` and `dripsInEpoch` become per tier, so
     lite claims cannot use up the full tier's slots. This changes REQ-08's single cap.
-11. **Delivery fees count against a whitelisted account's cap** (K-24), with REQ-19.
-12. **`0xEE` recipients** (K-27). The product warns; decide whether the contract pays such a
+10. **Delivery fees count against a whitelisted account's cap** (K-24), with REQ-19.
+11. **`0xEE` recipients** (K-27). The product warns; decide whether the contract pays such a
     recipient on Asset Hub only.
-13. **Host behaviour** (K-19). Hosts enforce the RFC-0024 allowlist and refuse proofs in another
+12. **Host behaviour** (K-19). Hosts enforce the RFC-0024 allowlist and refuse proofs in another
     product's context; track it with A-1 and A-2.
-14. **Product release process** (K-20). Custody of the DotNS name and the publishing key, and
+13. **Product release process** (K-20). Custody of the DotNS name and the publishing key, and
     reviewed releases, before launch.
