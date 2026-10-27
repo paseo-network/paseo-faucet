@@ -3,17 +3,23 @@ import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
 import '@fontsource/dm-serif-display/400.css';
 import './style.css';
-import { ASSET_HUB, chainInfo, claimBlocker, formatAmount, isEthereumDerived, netPas, parseRecipient, planPayouts, type FaucetService, type Payout, type Receipt, type Snapshot, type SkipReason, type TierConfig } from './model';
+import { ASSET_HUB, chainInfo, claimBlocker, formatAmount, isEthereumDerived, netPas, parseRecipient, planPayouts, type FaucetHost, type FaucetService, type Payout, type Receipt, type Snapshot, type SkipReason, type TierConfig } from './model';
 import type { Hex } from 'viem';
 
 const contractAddress = import.meta.env.VITE_FAUCET_ADDRESS?.trim() || '';
 const productId = import.meta.env.VITE_PRODUCT_ID || 'faucet.dot';
 const configured = /^0x[0-9a-fA-F]{40}$/.test(contractAddress) && !/^0x0{40}$/.test(contractAddress);
+const SIGNED_OUT = { text: 'Connect your Polkadot app to check eligibility and claim.' };
+let host: FaucetHost | undefined;
 let service: FaucetService | undefined;
 let state: Snapshot | undefined;
 let busy = false;
 let destroyed = false;
-let generation = 0;
+/** Whether the page runs in a Polkadot host, where the person can sign in. */
+let canSignIn = false;
+/** What the notice says while no account is connected. */
+let idle: { text: string; kind?: string } = configured ? { text: '' } : { text: 'The new faucet is being prepared. Claims will open after the contract is deployed and funded.' };
+let connecting: Promise<void> | undefined;
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <header class="navigation-bar">
@@ -27,7 +33,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <section class="how-it-works" aria-label="How to claim"><span><b>1</b> Connect your app</span><span class="step-divider" aria-hidden="true"></span><span><b>2</b> Enter your address</span><span class="step-divider" aria-hidden="true"></span><span><b>3</b> Get test tokens</span></section>
       <div class="connection-row">
         <span class="connection-status"><span class="status-dot" id="connection-dot"></span><button id="connection-label" class="address-copy" type="button" disabled>Not connected</button></span>
-        <button id="connect" class="text-button" type="button">Connect Polkadot app <span aria-hidden="true">↗</span></button>
+        <button id="connect" class="text-button" type="button" hidden>Connect Polkadot app <span aria-hidden="true">↗</span></button>
       </div>
       <form id="claim-form" novalidate>
         <div class="field-group address-group"><div class="label-row"><label for="address">Beneficiary</label><button id="use-account" class="text-button" type="button" hidden>Use connected account</button></div>
@@ -113,12 +119,20 @@ function personTier(): TierConfig | undefined {
   return service.heldTiers.map(t => config[t]).find(t => t.enabled);
 }
 function render() {
-  if (!state) {
-    notice(configured ? 'Connect in a Polkadot host to check eligibility and request tokens.' : 'The new faucet is being prepared. Claims will open after the contract is deployed and funded.');
+  if (state) {
+    const next = new Date(Number(state.nextEpochStart) * 1000);
+    el('faucet-status').textContent = state.paused ? 'Faucet paused' : `${state.used.toLocaleString()} / ${state.cap.toLocaleString()} claims this period`;
+    el('faucet-status').title = `Next period: ${next.toLocaleString()}`;
+    el('faucet-dot').classList.toggle('online', !state.paused && state.used < state.cap);
+    el('refresh').hidden = false;
+  }
+  if (!state || !service) {
+    notice(idle.text, idle.kind);
+    fillList(el('payout'), []);
     return validate();
   }
   const tier = personTier();
-  if (!service?.heldTiers.length) notice('Your Polkadot app has no People or People Lite key this faucet can use.');
+  if (!service.heldTiers.length) notice('Your Polkadot app has no People or People Lite key this faucet can use.');
   else notice(tier ? claimBlocker(state, tier) ?? '' : 'Claims for your personhood tier are temporarily disabled.');
   const { paid, skipped } = tier ? planPayouts(state.destinations, state, tier) : { paid: [], skipped: [] };
   fillList(el('payout'), paid.length ? [...paid.map(p => ({ text: payoutText(p) })), ...skipped.map(s => ({ text: `${chainInfo(s.id).name}: skipped, ${SKIP_TEXT[s.reason]}` }))] : []);
@@ -127,11 +141,6 @@ function render() {
     ? ` If your full personhood is not active yet, you get the lite amounts instead: ${formatAmount(state.lite.pas, 10)} PAS per chain${state.lite.pusd ? `, plus ${formatAmount(state.lite.pusd, 6)} pUSD where supported` : ''}.`
     : '';
   el('payout-help').textContent = `For a ${tier === state.full ? 'full' : 'lite'} person.${fallback}${paid.some(p => p.id !== ASSET_HUB) ? ' Other chains deduct their execution fee from the PAS and return what it does not use.' : ''}`;
-  const next = new Date(Number(state.nextEpochStart) * 1000);
-  el('faucet-status').textContent = state.paused ? 'Faucet paused' : `${state.used.toLocaleString()} / ${state.cap.toLocaleString()} claims this period`;
-  el('faucet-status').title = `Next period: ${next.toLocaleString()}`;
-  el('faucet-dot').classList.toggle('online', !state.paused && state.used < state.cap);
-  el('refresh').hidden = false;
   validate();
 }
 function setBusy(value: boolean) {
@@ -143,29 +152,63 @@ function setBusy(value: boolean) {
   validate();
 }
 
+/** Opens the faucet through the host, read-only, and connects whoever is signed in to it without a click. */
+async function start() {
+  setBusy(true); showAccount('Connecting…');
+  try {
+    const { openFaucet } = await import('./service');
+    const opened = await openFaucet(contractAddress as Hex, productId);
+    if (destroyed) return opened?.destroy();
+    canSignIn = Boolean(opened);
+    if (!opened) { idle = { text: 'Open this faucet inside a Polkadot host to connect your app and prove personhood.' }; return; }
+    host = opened;
+    state = await opened.refresh();
+    opened.onSignInChange((signedIn) => {
+      if (signedIn && !service) void connectAccount();
+      if (!signedIn && service) { service.destroy(); service = undefined; idle = SIGNED_OUT; showConnection(); render(); }
+    });
+    await connectAccount();
+  } catch (error) {
+    host?.destroy(); host = undefined; state = undefined;
+    canSignIn = true;
+    idle = { text: (error as Error).message, kind: 'error' };
+  } finally { if (!destroyed) { setBusy(false); showConnection(); render(); } }
+}
+/** Connects the signed-in person's account; while nobody is signed in, the page stays read-only. */
+function connectAccount(): Promise<void> {
+  connecting ??= (async () => {
+    try {
+      const connected = await host?.connect();
+      if (destroyed || !host) return connected?.destroy();
+      if (!connected) { idle = SIGNED_OUT; return; }
+      service?.destroy(); service = connected;
+      if (!addressInput.value) addressInput.value = connected.address;
+    } catch (error) {
+      idle = { text: (error as Error).message, kind: 'error' };
+    } finally { connecting = undefined; if (!destroyed) { showConnection(); render(); } }
+  })();
+  return connecting;
+}
+// Signed out, the button opens the host's sign-in, such as the code that pairs the Polkadot app.
 connectButton.addEventListener('click', async () => {
   if (busy) return;
-  if (!configured) return notice('The faucet contract has not been deployed yet. Claims will open once setup is completed.');
-  const run = ++generation;
-  setBusy(true); notice('Connecting to your Polkadot app…');
-  service?.destroy(); service = undefined; state = undefined;
-  showAccount('Connecting…'); el('connection-dot').classList.remove('online');
+  if (!host) return start();
+  setBusy(true); notice('Complete the sign-in in the Polkadot host.');
   try {
-    const { connectFaucet } = await import('./service');
-    const connected = await connectFaucet(contractAddress as Hex, productId);
-    if (destroyed || run !== generation) { connected.destroy(); return; }
-    service = connected;
-    state = await connected.refresh();
-    showAccount(`${connected.address.slice(0, 6)}…${connected.address.slice(-6)}`, connected.address);
-    el('connection-dot').classList.add('online'); connectButton.textContent = 'Reconnect ↗';
-    el('use-account').hidden = false;
-    if (!addressInput.value) addressInput.value = connected.address;
-    render();
+    if (await host.signIn()) await connectAccount();
+    else idle = SIGNED_OUT;
   } catch (error) {
-    service?.destroy(); service = undefined; state = undefined;
-    showAccount('Not connected'); notice((error as Error).message, 'error');
-  } finally { if (!destroyed && run === generation) setBusy(false); }
+    idle = { text: (error as Error).message, kind: 'error' };
+  } finally { if (!destroyed) { setBusy(false); showConnection(); render(); } }
 });
+/** The connection row: the account once connected; otherwise, in a host, the button to sign in. */
+function showConnection() {
+  const address = service?.address;
+  showAccount(address ? `${address.slice(0, 6)}…${address.slice(-6)}` : 'Not connected', address);
+  el('connection-dot').classList.toggle('online', Boolean(service));
+  connectButton.hidden = !canSignIn || Boolean(service);
+  el('use-account').hidden = !service;
+}
 /** Shows the connection state; with an address, the label is a button that copies it. */
 function showAccount(text: string, address?: string) {
   accountButton.textContent = text;
@@ -188,9 +231,9 @@ addressInput.addEventListener('input', () => validate(Boolean(addressInput.value
 addressInput.addEventListener('blur', () => validate(Boolean(addressInput.value)));
 el('use-account').addEventListener('click', () => { if (service) { addressInput.value = service.address; validate(true); } });
 el('refresh').addEventListener('click', async () => {
-  if (!service || busy) return;
+  if (!host || busy) return;
   setBusy(true);
-  try { state = await service.refresh(); render(); } catch (e) { notice((e as Error).message, 'error'); }
+  try { state = await host.refresh(); render(); } catch (e) { notice((e as Error).message, 'error'); }
   finally { setBusy(false); }
 });
 form.addEventListener('submit', async (event) => {
@@ -202,7 +245,7 @@ form.addEventListener('submit', async (event) => {
     const receipt = await service.claim(recipient, message => { notice(`${message}…`); claimButton.textContent = message.startsWith('Confirm ') ? 'Confirm in your Polkadot app' : message; });
     form.hidden = true; el('success').hidden = false;
     showReceipt(receipt);
-    try { state = await service.refresh(); } catch { /* Keep the successful receipt visible if refresh fails. */ }
+    try { if (host) state = await host.refresh(); } catch { /* Keep the successful receipt visible if refresh fails. */ }
   } catch (error) { notice((error as Error).message, 'error'); }
   finally { claimButton.textContent = 'Get some PAS'; setBusy(false); }
 });
@@ -218,5 +261,6 @@ function showReceipt(receipt: Receipt) {
 }
 el('back').addEventListener('click', () => { el('success').hidden = true; form.hidden = false; render(); });
 addressInput.value = new URLSearchParams(location.search).get('address') || '';
-window.addEventListener('pagehide', () => { destroyed = true; ++generation; service?.destroy(); });
+window.addEventListener('pagehide', () => { destroyed = true; service?.destroy(); host?.destroy(); });
 render();
+if (configured) void start();

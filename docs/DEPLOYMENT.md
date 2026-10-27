@@ -182,8 +182,10 @@ People genesis and the 32-byte, space-padded collection ID for either
 
 1. Record the recipient's balances on Asset Hub and on People, the current epoch, and
    `dripsInEpoch(epoch)`. Use a Substrate recipient address for easy comparison.
-2. Open the published product **inside the compatible host**, click **Connect
-   Polkadot app**, and approve the requested account/chain permissions.
+2. Open the published product **inside the compatible host**. Signed in to the host, the
+   page connects your account by itself; signed out, click **Connect Polkadot app** and pair
+   the Polkadot app with the code the host shows. Approve the requested account/chain
+   permissions.
 3. Enter the recipient, check the amounts listed for Asset Hub and People, and click
    **Get some PAS**.
 4. Approve the personhood and transaction prompts. The app obtains the contract's

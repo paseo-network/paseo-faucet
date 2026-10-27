@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { expect, test, type Page } from '@playwright/test';
 
 test('Paseo-only landing page has no chain picker and an honest setup state', async ({ page }) => {
   const errors: string[] = [];
@@ -9,11 +10,65 @@ test('Paseo-only landing page has no chain picker and an honest setup state', as
   await expect(page.locator('#payout-summary')).toBeHidden();
   await expect(page.locator('#claim')).toBeDisabled();
   await expect(page.locator('#notice')).toContainText('contract is deployed');
-  await page.getByRole('button', { name: 'Connect Polkadot app' }).click();
-  await expect(page.locator('#notice')).toContainText('not been deployed');
+  await expect(page.locator('#connect')).toBeHidden();
   await expect(page.locator('#connection-label')).toHaveText('Not connected');
   await expect(page.locator('#connection-label')).toBeDisabled();
   expect(errors).toEqual([]);
+});
+
+test.describe('a deployed faucet in a Polkadot host', () => {
+  test.use({ baseURL: 'http://127.0.0.1:4174' });
+  const fakeService = readFileSync(new URL('./fake-service.js', import.meta.url), 'utf8');
+  /** Serves the page with `src/service.ts` replaced by a host scripted with `host`. */
+  async function openWith(page: Page, host: { inside: boolean; signedIn?: boolean; login?: string }) {
+    await page.addInitScript((scenario) => { (window as unknown as { fakeHost: unknown }).fakeHost = scenario; }, host);
+    await page.route('**/src/service.ts*', route => route.fulfill({ contentType: 'text/javascript', body: fakeService }));
+    await page.goto('/');
+  }
+  const logins = (page: Page) => page.evaluate(() => (window as unknown as { fakeHost: { logins?: number } }).fakeHost.logins ?? 0);
+
+  test('outside a host, the page says where to open it and offers no sign-in', async ({ page }) => {
+    await openWith(page, { inside: false });
+    await expect(page.locator('#notice')).toHaveText('Open this faucet inside a Polkadot host to connect your app and prove personhood.');
+    await expect(page.locator('#connect')).toBeHidden();
+    await expect(page.locator('#connection-label')).toHaveText('Not connected');
+  });
+
+  test('signed in to the host, the account connects without a click', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: true });
+    await expect(page.locator('#connection-label')).toHaveText('5Grwva…GKutQY');
+    await expect(page.locator('#connect')).toBeHidden();
+    await expect(page.locator('#payout')).toContainText('Asset Hub: 5,000 PAS + 500 pUSD');
+    await expect(page.getByLabel('Beneficiary')).toHaveValue('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
+    await expect(page.locator('#claim')).toBeEnabled();
+    expect(await logins(page)).toBe(0);
+    await page.evaluate(() => (window as unknown as { fakeSignOut(): void }).fakeSignOut());
+    await expect(page.locator('#connect')).toBeVisible();
+    await expect(page.locator('#connection-label')).toHaveText('Not connected');
+    await expect(page.locator('#claim')).toBeDisabled();
+  });
+
+  test('signed out, the faucet is read-only and the button opens the host sign-in', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: false });
+    await expect(page.locator('#faucet-status')).toHaveText('10 / 1,000 claims this period');
+    await expect(page.locator('#notice')).toHaveText('Connect your Polkadot app to check eligibility and claim.');
+    await expect(page.locator('#payout-summary')).toBeHidden();
+    await expect(page.locator('#claim')).toBeDisabled();
+    await page.getByRole('button', { name: 'Connect Polkadot app' }).click();
+    await expect(page.locator('#connection-label')).toHaveText('5Grwva…GKutQY');
+    await expect(page.locator('#connect')).toBeHidden();
+    await expect(page.locator('#payout')).toContainText('Asset Hub: 5,000 PAS + 500 pUSD');
+    expect(await logins(page)).toBe(1);
+  });
+
+  test('a cancelled sign-in keeps the faucet read-only', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: false, login: 'Rejected' });
+    await page.getByRole('button', { name: 'Connect Polkadot app' }).click();
+    await expect(page.locator('#notice')).toHaveText('Connect your Polkadot app to check eligibility and claim.');
+    await expect(page.locator('#connect')).toBeVisible();
+    await expect(page.locator('#connect')).toBeEnabled();
+    expect(await logins(page)).toBe(1);
+  });
 });
 
 test('an Ethereum recipient is warned that only Asset Hub can use it, an invalid one is refused', async ({ page }) => {
