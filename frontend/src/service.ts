@@ -8,10 +8,22 @@ import abi from './faucet.abi.json';
 import { ASSET_HUB_GENESIS, PEOPLE_GENESIS, SKIP_REASONS, bytesEqual, chainInfo, claimBlocker, encodeProof, planPayouts, type Destination, type FaucetHost, type FaucetService, type Payout, type Skipped, type Snapshot, type TierConfig } from './model';
 
 const SIGN_IN = 'Sign in to this Polkadot host with your Polkadot app, then connect again.';
+/** How long a chain read may take. */
+const READ_TIMEOUT_MS = 60_000;
+/** How long a host call that may wait for the person's approval in the Polkadot app may take. */
+const APPROVAL_TIMEOUT_MS = 120_000;
+/** How long the host's sign-in, such as pairing the Polkadot app, may take. */
+const SIGN_IN_TIMEOUT_MS = 300_000;
 
 function errorText(value: unknown): string {
   if (value instanceof Error) return value.message;
   return JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
+}
+/** Rejects, naming the step, unless `promise` settles within `ms`. */
+function within<T>(promise: Promise<T>, ms: number, step: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`${step} took too long. Please try again.`)), ms); });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
 }
 // product-sdk-contracts returns a function's several named outputs as an object keyed by name.
 function tierFrom(value: unknown): TierConfig {
@@ -58,7 +70,7 @@ function ringOf(key: { rings: readonly RingLocation[] }, tier: number): RingLoca
 }
 
 async function allocateFees(request = requestResourceAllocation) {
-  const allocation = await request([{ tag: 'SmartContractAllowance', value: { tag: 'Index', value: 0 } }]);
+  const allocation = await within(request([{ tag: 'SmartContractAllowance', value: { tag: 'Index', value: 0 } }]), APPROVAL_TIMEOUT_MS, 'Preparing transaction fees');
   if (!allocation.ok) throw allocation.error;
   if (allocation.value[0] !== 'Allocated') throw new Error('This host cannot provide PGAS for the claim. Try a supported Polkadot host.');
 }
@@ -91,7 +103,7 @@ export async function openFaucet(address: Hex, productId: string, dependencies: 
   try {
     const faucet = createContractFromClient(client.raw.assetHub, devnet_asset_hub, address, abi as AbiEntry[], { defaultOrigin: QUERY_FALLBACK_ORIGIN });
     async function query<T>(method: string, ...args: unknown[]): Promise<T> {
-      const result = await faucet[method].query(...args);
+      const result = await within(faucet[method].query(...args), READ_TIMEOUT_MS, 'Reading the faucet');
       if (!result.success) throw new Error(`${method}: ${errorText(result.value)}`);
       return result.value as T;
     }
@@ -118,10 +130,10 @@ export async function openFaucet(address: Hex, productId: string, dependencies: 
       refresh: reader.refresh,
       connect: () => connectAccount(reader, dependencies),
       async signIn() {
-        const outcome = await accounts.requestLogin('Sign in to claim Paseo test tokens.').match(
+        const outcome = await within(accounts.requestLogin('Sign in to claim Paseo test tokens.').match(
           (response) => ({ response }),
           (error) => ({ error }),
-        );
+        ), SIGN_IN_TIMEOUT_MS, 'Signing in');
         if ('response' in outcome) return outcome.response !== 'Rejected';
         // A host that predates the call leaves signing in to its own controls.
         if (hostTags(outcome.error).includes('Unsupported')) throw new Error(SIGN_IN);
@@ -150,9 +162,9 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
   const { SignerManager, createContractFromClient, isContractAccountMapped, ensureContractAccountMapped, requestResourceAllocation } = dependencies;
   const signerManager = new SignerManager({ dappName: productId, ss58Prefix: 0 });
   try {
-    const connected = await signerManager.connect();
+    const connected = await within(signerManager.connect(), APPROVAL_TIMEOUT_MS, 'Connecting to the Polkadot host');
     if (!connected.ok) throw connected.error;
-    const account = await signerManager.getProductAccount(productId, 0);
+    const account = await within(signerManager.getProductAccount(productId, 0), APPROVAL_TIMEOUT_MS, 'Connecting to the Polkadot host');
     if (!account.ok) {
       if (hostTags(account.error).includes('NotConnected')) { signerManager.destroy(); return null; }
       throw account.error;
@@ -162,7 +174,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
     async function ensureFees() {
       // Public Paseo PGAS uses 10 decimal places. Keep a conservative 1-PGAS
       // fee/deposit buffer, rather than consuming a host allocation per click.
-      const gas = await client.assetHub.query.Assets.Account.getValue(2000000000, productAccount.address, { at: 'best' });
+      const gas = await within(client.assetHub.query.Assets.Account.getValue(2000000000, productAccount.address, { at: 'best' }), READ_TIMEOUT_MS, 'Preparing transaction fees');
       if ((gas?.balance ?? 0n) < 10_000_000_000n) await allocateFees(requestResourceAllocation);
     }
     let mapped = false;
@@ -171,7 +183,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
       progress('Preparing transaction fees');
       await ensureFees();
       if (mapped) return;
-      const check = await isContractAccountMapped(runtime, productAccount.address);
+      const check = await within(isContractAccountMapped(runtime, productAccount.address), READ_TIMEOUT_MS, 'Preparing transaction fees');
       if (!check.ok) throw check.error;
       if (!check.value) {
         progress('Confirm the one-time account setup in your Polkadot app');
@@ -185,7 +197,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
     const faucet = createContractFromClient(client.raw.assetHub, devnet_asset_hub, address, abi as AbiEntry[], {
       defaultOrigin: productAccount.address, defaultSigner: signer,
     });
-    const listed = await signerManager.listRingVrfKeys('peopl.dot');
+    const listed = await within(signerManager.listRingVrfKeys('peopl.dot'), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
     const heldTiers = listed.ok ? [2, 1].filter((tier) => listed.value.some((key) => ringOf(key, tier))) : [];
     let claiming = false;
     const service: FaucetService = {
@@ -197,7 +209,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
         try {
           // Resource allocation must precede the first contract transaction for a zero-PAS signer.
           await prepareAccount(progress);
-          const keys = await signerManager.listRingVrfKeys('peopl.dot');
+          const keys = await within(signerManager.listRingVrfKeys('peopl.dot'), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
           if (!keys.ok) throw keys.error;
           // Retry proof preparation only. Never automatically resubmit an uncertain signed transaction.
           for (let attempt = 0; attempt < 2; attempt++) {
@@ -222,7 +234,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
               const blocked = claimBlocker(state, candidate.tier === 2 ? state.full : state.lite);
               if (blocked) { rejection = blocked; continue; }
               progress('Proving personhood');
-              const proof = await signerManager.createRingVRFProof(candidate.key.handle, proofContext, candidate.ring, hexToBytes(message));
+              const proof = await within(signerManager.createRingVRFProof(candidate.key.handle, proofContext, candidate.ring, hexToBytes(message)), APPROVAL_TIMEOUT_MS, 'Proving personhood');
               if (!proof.ok) {
                 if (/NotMember|NotAMember/i.test(errorText(proof.error))) {
                   service.heldTiers = service.heldTiers.filter((tier) => tier !== candidate.tier);
@@ -246,7 +258,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
             const { proof, alias, tier, due } = selected;
             const args = [tier, recipient, encodeProof(proof.value.proof), alias, proof.value.ringIndex, proof.value.ringRevision];
             progress('Checking your claim');
-            const dry = await faucet.drip.query(...args);
+            const dry = await within(faucet.drip.query(...args), READ_TIMEOUT_MS, 'Checking your claim');
             if (!dry.success) {
               const text = errorText(dry.value);
               if (attempt === 0 && text.includes('InvalidProof')) continue;
@@ -254,7 +266,13 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
             }
             const { paid } = planPayouts(due, state, tier === 2 ? state.full : state.lite);
             progress(`Confirm the claim to ${recipient} on ${paid.map((p) => chainInfo(p.id).name).join(', ')} in your Polkadot app`);
-            const result = await faucet.drip.tx(...args, { signer, waitFor: 'finalized' });
+            const result = await faucet.drip.tx(...args, {
+              signer, waitFor: 'finalized',
+              onStatus: (status: string) => {
+                if (status === 'broadcasting') progress('Submitting the claim');
+                if (status === 'in-block') progress('Waiting for finality');
+              },
+            });
             if (!result.ok) throw result.error;
             return { txHash: result.value.txHash, recipient, ...claimOutcome(result.value.events, address) };
           }

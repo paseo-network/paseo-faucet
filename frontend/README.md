@@ -131,7 +131,7 @@ The browser tests start and stop their own Vite servers: port 4173 serves the un
 and port 4174 a deployed one whose host integration the tests replace with a scripted host.
 Tests cover chain display data, address handling, proof encoding, the payout plan and advisory
 eligibility, the signer/ABI handoff, the per-chain quota, event decoding, tier fallback,
-retries, context rejection, new-account setup, sign-in and the connection
+retries, step timeouts, context rejection, new-account setup, sign-in and the connection
 states, responsive layouts, the address deep link and absence of third-party requests on the
 disconnected page. The SDK-facing tests use explicit test doubles; they do not replace a real
 host or a cryptographic proof test.
