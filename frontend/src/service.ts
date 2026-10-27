@@ -41,6 +41,14 @@ function hostTags(error: unknown): string[] {
   }
   return tags;
 }
+/** A host refusal of personhood keys or proofs in words; any other error as it is. */
+function keyRefusal(error: unknown): Error {
+  const tags = hostTags(error);
+  if (tags.includes('NotConnected')) return new Error(SIGN_IN);
+  if (tags.includes('NotAllowlisted')) return new Error('This Polkadot host does not allow the faucet to use your personhood proof yet.');
+  if (tags.includes('Rejected')) return new Error('The personhood proof was declined in the Polkadot host.');
+  return error instanceof Error ? error : new Error(errorText(error));
+}
 /** The faucet's `Dripped` and `DripSkipped` events among a transaction's events. */
 export function claimOutcome(events: unknown[], address: Hex): { paid: Payout[]; skipped: Skipped[] } {
   const paid: Payout[] = [];
@@ -72,6 +80,7 @@ function ringOf(key: { rings: readonly RingLocation[] }, tier: number): RingLoca
 async function allocateFees(request = requestResourceAllocation) {
   const allocation = await within(request([{ tag: 'SmartContractAllowance', value: { tag: 'Index', value: 0 } }]), APPROVAL_TIMEOUT_MS, 'Preparing transaction fees');
   if (!allocation.ok) throw allocation.error;
+  if (allocation.value[0] === 'Rejected') throw new Error('PGAS for the claim was declined in the Polkadot host.');
   if (allocation.value[0] !== 'Allocated') throw new Error('This host cannot provide PGAS for the claim. Try a supported Polkadot host.');
 }
 
@@ -210,7 +219,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
           // Resource allocation must precede the first contract transaction for a zero-PAS signer.
           await prepareAccount(progress);
           const keys = await within(signerManager.listRingVrfKeys('peopl.dot'), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
-          if (!keys.ok) throw keys.error;
+          if (!keys.ok) throw keyRefusal(keys.error);
           // Retry proof preparation only. Never automatically resubmit an uncertain signed transaction.
           for (let attempt = 0; attempt < 2; attempt++) {
             const state = await refresh();
@@ -236,11 +245,11 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
               progress('Proving personhood');
               const proof = await within(signerManager.createRingVRFProof(candidate.key.handle, proofContext, candidate.ring, hexToBytes(message)), APPROVAL_TIMEOUT_MS, 'Proving personhood');
               if (!proof.ok) {
-                if (/NotMember|NotAMember/i.test(errorText(proof.error))) {
+                if (hostTags(proof.error).includes('NotMember')) {
                   service.heldTiers = service.heldTiers.filter((tier) => tier !== candidate.tier);
                   continue;
                 }
-                throw proof.error; // Permission failures must not be hidden by a tier fallback.
+                throw keyRefusal(proof.error); // Permission failures must not be hidden by a tier fallback.
               }
               if (!bytesEqual(proof.value.contextualAlias.context, context)) throw new Error('The host proof context does not match the faucet.');
               const alias = bytesToHex(proof.value.contextualAlias.alias);

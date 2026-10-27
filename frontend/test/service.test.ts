@@ -19,7 +19,7 @@ function emitted(eventName: 'Dripped' | 'DripSkipped', destinationId: number, va
     : encodeAbiParameters([{ type: 'uint8' }, { type: 'bytes32' }, { type: 'uint8' }], [2, alias, Number(values[0])]);
   return { type: 'Revive', value: { type: 'ContractEmitted', value: { contract: from, data: hexToBytes(data), topics } } };
 }
-function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean } = {}) {
+function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean; pgasResponse?: string } = {}) {
   const calls: string[] = [];
   const statusListeners = new Set<(status: string) => void>();
   let proofs = 0, txs = 0, drys = 0;
@@ -46,8 +46,8 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
       assert.deepEqual(ctx, { productId: 'faucet.dot', suffix: { tag: 'Index', value: 20000 } });
       assert.deepEqual(location, ring(handle === 'lite'));
       assert.equal(bytesToHex(message), '0x1234');
-      if (options.permissionDenied) return { ok: false, error: new Error('NotAllowlisted') };
-      if (options.fullNotMember && handle === 'full') return { ok: false, error: new Error('NotMember') };
+      if (options.permissionDenied) return { ok: false, error: hostError('NotAllowlisted') };
+      if (options.fullNotMember && handle === 'full') return { ok: false, error: hostError('NotMember') };
       return { ok: true, value: { proof: new Uint8Array(785), contextualAlias: { context: hexToBytes(options.contextMismatch ? alias : context), alias: hexToBytes(alias) }, ringIndex: 3, ringRevision: 57 } };
     }
     destroy() { calls.push('destroy-signer'); }
@@ -111,7 +111,7 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
     isContractAccountMapped: async () => ({ ok: true, value: options.mapped !== false }),
     ensureContractAccountMapped: async () => { calls.push('map'); return { ok: true }; },
     createContractFromClient: (_client: unknown, _descriptor: unknown, _address: unknown, _abi: unknown, defaults: { defaultOrigin?: string }) => { origins.push(defaults.defaultOrigin); return faucet; },
-    requestResourceAllocation: async () => { calls.push('pgas'); return options.stuckAllocation ? new Promise(() => {}) : { ok: true, value: ['Allocated'] }; },
+    requestResourceAllocation: async () => { calls.push('pgas'); return options.stuckAllocation ? new Promise(() => {}) : { ok: true, value: [options.pgasResponse ?? 'Allocated'] }; },
   } as unknown as FaucetDependencies;
   return {
     dependencies, calls, origins, statusListeners,
@@ -218,6 +218,11 @@ test('accounts with enough PGAS do not consume another host allocation', async (
   await (await connect(mock)).claim(recipient, () => {});
   assert.deepEqual(mock.calls.slice(2), ['proof', 'dry', 'tx']);
 });
+test('a declined PGAS request stops the claim and says so', async () => {
+  const mock = setup({ pgasResponse: 'Rejected' });
+  await assert.rejects((await connect(mock)).claim(recipient, () => {}), /^Error: PGAS for the claim was declined in the Polkadot host\.$/);
+  assert.equal(mock.counts.txs, 0);
+});
 test('a host step that never answers fails the claim and names the step', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const mock = setup({ stuckAllocation: true });
@@ -236,7 +241,7 @@ test('NotMember permits a lite fallback, while host permission failures stop imm
   assert.deepEqual(fallback.heldTiers, [1]);
   const denied = setup({ permissionDenied: true });
   const faucet = await connect(denied);
-  await assert.rejects(faucet.claim(recipient, () => {}), /NotAllowlisted/);
+  await assert.rejects(faucet.claim(recipient, () => {}), /does not allow the faucet to use your personhood proof/);
   assert.deepEqual(denied.counts, { proofs: 1, txs: 0, drys: 0 });
 });
 test('a person paid on some chains can claim the rest; paid on every enabled chain, never reaches signing', async () => {
