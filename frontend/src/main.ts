@@ -122,7 +122,11 @@ function render() {
   else notice(tier ? claimBlocker(state, tier) ?? '' : 'Claims for your personhood tier are temporarily disabled.');
   const { paid, skipped } = tier ? planPayouts(state.destinations, state, tier) : { paid: [], skipped: [] };
   fillList(el('payout'), paid.length ? [...paid.map(p => ({ text: payoutText(p) })), ...skipped.map(s => ({ text: `${chainInfo(s.id).name}: skipped, ${SKIP_TEXT[s.reason]}` }))] : []);
-  el('payout-help').textContent = `For a ${tier === state.full ? 'full' : 'lite'} person.${paid.some(p => p.id !== ASSET_HUB) ? ' Other chains deduct their execution fee from the PAS and return what it does not use.' : ''}`;
+  // A key held for the full ring may not be a member of it; the claim then falls back to the lite tier.
+  const fallback = tier === state.full && service?.heldTiers.includes(1) && state.lite.enabled
+    ? ` If your full personhood is not active yet, you get the lite amounts instead: ${formatAmount(state.lite.pas, 10)} PAS per chain${state.lite.pusd ? `, plus ${formatAmount(state.lite.pusd, 6)} pUSD where supported` : ''}.`
+    : '';
+  el('payout-help').textContent = `For a ${tier === state.full ? 'full' : 'lite'} person.${fallback}${paid.some(p => p.id !== ASSET_HUB) ? ' Other chains deduct their execution fee from the PAS and return what it does not use.' : ''}`;
   const next = new Date(Number(state.nextEpochStart) * 1000);
   el('faucet-status').textContent = state.paused ? 'Faucet paused' : `${state.used.toLocaleString()} / ${state.cap.toLocaleString()} claims this period`;
   el('faucet-status').title = `Next period: ${next.toLocaleString()}`;

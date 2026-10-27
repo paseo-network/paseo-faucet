@@ -4,19 +4,20 @@ import { bytesToHex, hexToBytes, type Hex } from 'viem';
 export const ASSET_HUB = 1000;
 export const ASSET_HUB_GENESIS = '0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2';
 export const PEOPLE_GENESIS = '0xe6c30d6e148f250b887105237bcaa5cb9f16dd203bf7b5b9d4f1da7387cb86ec';
-export interface Chain { id: number; name: string; explorer: string; }
+/** `explorer` is a block explorer for the chain, where one exists. */
+export interface Chain { id: number; name: string; explorer?: string; }
 const CHAINS: Chain[] = [
   { id: 0, name: 'Paseo Relay', explorer: 'https://paseo.subscan.io' },
   { id: 1000, name: 'Asset Hub', explorer: 'https://assethub-paseo.subscan.io' },
-  { id: 1004, name: 'People', explorer: 'https://people-paseo.subscan.io' },
-  { id: 1010, name: 'Bulletin', explorer: 'https://polkadot.js.org/apps/' },
-  { id: 1500, name: 'Asset Hub Next', explorer: 'https://polkadot.js.org/apps/' },
-  { id: 1501, name: 'Bulletin Next', explorer: 'https://polkadot.js.org/apps/' },
-  { id: 1502, name: 'People Next', explorer: 'https://polkadot.js.org/apps/' },
+  { id: 1004, name: 'People' },
+  { id: 1010, name: 'Bulletin' },
+  { id: 1500, name: 'Asset Hub Next' },
+  { id: 1501, name: 'Bulletin Next' },
+  { id: 1502, name: 'People Next' },
 ];
 /** Display data for a para id. Which chains a claim pays comes from the contract, not from this list. */
 export function chainInfo(id: number): Chain {
-  return CHAINS.find((chain) => chain.id === id) ?? { id, name: `Parachain ${id}`, explorer: 'https://polkadot.js.org/apps/' };
+  return CHAINS.find((chain) => chain.id === id) ?? { id, name: `Parachain ${id}` };
 }
 export interface Destination {
   id: number; enabled: boolean; pasTransfer: number; pusdTransfer: number;
@@ -37,7 +38,7 @@ export interface Skipped { id: number; reason: SkipReason; }
 export interface Receipt { txHash: string; recipient: Hex; paid: Payout[]; skipped: Skipped[]; }
 export interface FaucetService {
   address: string;
-  /** The tiers the person holds a personhood key for, full (2) before lite (1). */
+  /** The tiers the person holds a personhood key for, full (2) before lite (1); a claim drops one the host reports the key is not a member for. */
   heldTiers: number[];
   refresh(): Promise<Snapshot>;
   claim(recipient: Hex, progress: (message: string) => void): Promise<Receipt>;
