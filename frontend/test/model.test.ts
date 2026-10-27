@@ -18,6 +18,8 @@ test('chain display data covers the Paseo chains and any other para id', () => {
   assert.deepEqual([0, 1000, 1004, 1010, 1500, 1501, 1502].map(id => chainInfo(id).name),
     ['Paseo Relay', 'Asset Hub', 'People', 'Bulletin', 'Asset Hub Next', 'Bulletin Next', 'People Next']);
   assert.equal(chainInfo(2034).name, 'Parachain 2034');
+  assert.deepEqual([0, 1000, 1004, 2034].map(id => chainInfo(id).explorer),
+    ['https://paseo.subscan.io', 'https://assethub-paseo.subscan.io', undefined, undefined]);
 });
 test('recipients decode to AccountId32, an H160 to its 0xEE account', () => {
   assert.equal(parseRecipient(alice), '0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d');

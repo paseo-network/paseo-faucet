@@ -154,7 +154,10 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
               progress('Proving personhood');
               const proof = await signerManager.createRingVRFProof(candidate.key.handle, proofContext, candidate.ring, hexToBytes(message));
               if (!proof.ok) {
-                if (/NotMember|NotAMember/i.test(errorText(proof.error))) continue;
+                if (/NotMember|NotAMember/i.test(errorText(proof.error))) {
+                  service.heldTiers = service.heldTiers.filter((tier) => tier !== candidate.tier);
+                  continue;
+                }
                 throw proof.error; // Permission failures must not be hidden by a tier fallback.
               }
               if (!bytesEqual(proof.value.contextualAlias.context, context)) throw new Error('The host proof context does not match the faucet.');

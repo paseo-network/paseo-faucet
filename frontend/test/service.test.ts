@@ -161,8 +161,11 @@ test('accounts with enough PGAS do not consume another host allocation', async (
 });
 test('NotMember permits a lite fallback, while host permission failures stop immediately', async () => {
   const lite = setup({ fullNotMember: true });
-  await (await connectFaucet(contract, 'faucet.dot', lite.dependencies)).claim(recipient, () => {});
+  const fallback = await connectFaucet(contract, 'faucet.dot', lite.dependencies);
+  assert.deepEqual(fallback.heldTiers, [2, 1]);
+  await fallback.claim(recipient, () => {});
   assert.equal(lite.transactionArgs[0], 1);
+  assert.deepEqual(fallback.heldTiers, [1]);
   const denied = setup({ permissionDenied: true });
   const faucet = await connectFaucet(contract, 'faucet.dot', denied.dependencies);
   await assert.rejects(faucet.claim(recipient, () => {}), /NotAllowlisted/);
