@@ -3,8 +3,9 @@
 This runbook deploys the contract and the frontend as a Polkadot product on **public
 Paseo**. One claim pays every enabled destination. `contracts/script/Deploy.s.sol`
 registers Asset Hub (1000), People (1004), Bulletin (1010), Asset Hub Next (1500), Bulletin
-Next (1501) and People Next (1502); other chains are added with `setDestination` once
-measured and tested ([Adding a destination](../README.md#adding-a-destination)).
+Next (1501) and People Next (1502); other chains are added to `launch()` once measured and
+tested, and the **Configure contract** workflow registers them on the deployed contract
+([Adding a destination](../README.md#adding-a-destination)).
 Whitelisted accounts (REQ-19) are added by the owner after the deploy, with `setWhitelisted`.
 
 Start with a canary, using small balances. A successful build or simulated claim is
