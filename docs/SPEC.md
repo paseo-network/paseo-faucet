@@ -952,9 +952,9 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
 **Contract**
 
 1. **Destinations 1010, 1500, 1501 and 1502 on the live contract.** Their entries are measured
-   on the forks and in `launch()`. The owner adds them to the deployed contract with
-   `setDestination`, then a live arrival test per chain follows (8.6). pUSD on Asset Hub Next
-   and People Next System waits for Asset Hub's pUSD to be registered there.
+   on the forks and in `launch()`. The Configure contract workflow adds them to the deployed
+   contract with `setDestination`, then a live arrival test per chain follows (8.6). pUSD on
+   Asset Hub Next and People Next System waits for Asset Hub's pUSD to be registered there.
 
 **Product**
 

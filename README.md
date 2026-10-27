@@ -402,10 +402,11 @@ contracts/                      Foundry project; forge-std is a git submodule in
   src/XcmProgram.sol            SCALE encoder for the XCM v5 payout programs
   src/interfaces/               IPersonhood, ISystem and IXcm copied from their pinned sources; a minimal IERC20
   script/Deploy.s.sol           deploys, configures and proposes the owner; launch() holds the launch entries
+  script/Configure.s.sol        brings a deployed faucet's destinations in line with launch()
   test/                         unit tests with the precompiles mocked at their addresses, golden XCM vectors, a deploy test
   test/harness/FaucetHarness.sol  test-only subclass with owner-only pay() and dripWithoutProof(); for the fork check, never for real funds
 frontend/                       Paseo-only static UI, Product SDK integration, unit and browser tests
-deploy/                         deploy tooling: the contract deploy as the operator account (contract.ts); the app's archive, status, restore and authorize (keepalive.ts)
+deploy/                         deploy tooling: the contract deploy and owner calls as the operator account (contract.ts); the app's archive, status, restore and authorize (keepalive.ts)
 fork/                           fork check: chopsticks forks of the Paseo chains, driven with papi and viem
   check.ts                      the checks; writes docs/evidence/fork-check.json
   lib.ts                        fork, transaction and contract helpers
@@ -525,6 +526,7 @@ runbook below deploys the same script by hand with an Ethereum key.
 | Workflow | Runs | Does |
 |---|---|---|
 | Deploy contract (`deploy-contract.yml`) | dispatched on `main` | simulates `Deploy.s.sol` as the operator account's Ethereum address, sends the simulated transactions to Paseo Asset Hub as Substrate extrinsics signed by that account (`deploy/contract.ts`), checks the deployed settings, verifies the source on Blockscout, and tags the commit `contract/<YYYY-MM-DD>.<n>` with the address |
+| Configure contract (`configure-contract.yml`) | dispatched on `main` | simulates `Configure.s.sol` as the operator account's Ethereum address, which plans a `setDestination` for each `launch()` entry the faucet at `FAUCET_ADDRESS` lacks or holds differently, sends those calls in one batch signed by that account, then simulates again and fails unless nothing is left to change. A faucet already in line gets no transaction |
 | Deploy app (`deploy-app.yml`) | dispatched on `main` | checks that `FAUCET_ADDRESS` is a `paseo-faucet:v2` contract for `PRODUCT_ID`, builds `frontend/`, publishes it under `PRODUCT_ID` on the PCF devnet with `polkadot-app-deploy`, and releases an archive of every block the name points at as `app/<YYYY-MM-DD>.<n>` |
 | Keep app alive (`keep-app-alive.yml`) | every day, and on demand with `force` | stores the latest `app/*` release's blocks again once the oldest is 13 days old or one is missing ([below](#keeping-the-app-stored)) |
 
@@ -534,17 +536,17 @@ an approval every day.
 
 | Name | Kind | Used by | Value |
 |---|---|---|---|
-| `MNEMONIC` | secret | all three | the operator account: its sr25519 root account deploys the contract, owns `PRODUCT_ID` and stores the app on Bulletin 1010 ([DEPLOYMENT.md](docs/DEPLOYMENT.md#2-prepare-the-operator-account-and-name)) |
+| `MNEMONIC` | secret | all four | the operator account: its sr25519 root account deploys and configures the contract, owns `PRODUCT_ID` and stores the app on Bulletin 1010 ([DEPLOYMENT.md](docs/DEPLOYMENT.md#2-prepare-the-operator-account-and-name)) |
 | `BULLETIN_AUTHORIZER` | secret | Deploy app, Keep app alive | the key URI of a Bulletin 1010 storage authorizer (`//Eve` on the PCF devnet), which grants or extends the operator account's storage authorization |
-| `PRODUCT_ID` | variable | all three | the DotNS name the app is served from, which is also the contract's `productId` |
+| `PRODUCT_ID` | variable | all but Configure contract | the DotNS name the app is served from, which is also the contract's `productId` |
 | `EPOCH_SECONDS`, `MAX_DRIPS_PER_EPOCH`, `LITE_PAS`, `LITE_PUSD`, `FULL_PAS`, `FULL_PUSD` | variables | Deploy contract | as in [Calls](#calls) |
 | `OWNER`, `PAUSER` | variables | Deploy contract | the owner and the pauser. The operator account's Ethereum address, which the run prints, makes it both, with no handover; any other `OWNER` accepts ownership after the deploy (step 5 of [Calls](#calls)) |
-| `FAUCET_ADDRESS` | variable | Deploy app | the deployed contract, from the Deploy contract run's summary |
+| `FAUCET_ADDRESS` | variable | Deploy app, Configure contract | the deployed contract, from the Deploy contract run's summary |
 
 The order is: Deploy contract; when `OWNER` is not the operator, `OWNER` accepts ownership
 (step 5 of [Calls](#calls)); set `FAUCET_ADDRESS`; fund the faucet (steps 6 and 7); Deploy
 app; then Keep app alive once with `force`, to check the operator account's storage
-authorization end to end. All three workflows share one concurrency group, since they sign
+authorization end to end. All four workflows share one concurrency group, since they sign
 with the same account. The workflows print no secret, and only the release and tag jobs,
 which hold none, can write to the repository.
 
@@ -724,7 +726,7 @@ Blockscout shows the contract as verified.
 | What happens | Effect | Response |
 |---|---|---|
 | The broadcast stops midway | A partly configured contract, still owned by the deployer and unfunded | Rerun step 3 with `--resume`, or deploy again. |
-| A tier, cap, pauser or destination value is wrong | | The owner calls `setTier`, `setMaxDripsPerEpoch`, `setPauser` or `setDestination`. |
+| A tier, cap, pauser or destination value is wrong | | The owner calls `setTier`, `setMaxDripsPerEpoch`, `setPauser` or `setDestination`. For a destination, correct `launch()` and run the Configure contract workflow. |
 | `PRODUCT_ID` or `EPOCH_SECONDS` is wrong | Proofs from the product fail, or epochs differ | Immutable: deploy again. |
 | `OWNER` is wrong and not yet accepted | | The deployer calls `transferOwnership` with the right address. |
 | Claims misbehave, or a runtime upgrade changes a precompile or XCM | | The pauser or owner calls `pause()`. Rerun the fork check, then `unpause()` or migrate. |
@@ -767,8 +769,10 @@ pUSD below its `minPusd`, 0 included, pays it PAS only.
    live state, as `fork/check.ts` does for People, and check that a drip is credited with
    nothing trapped, the measured fees, `minPas` = existential deposit + `remoteFee`, and
    `minPusd`. Keep `remoteFee` and `maxDeliveryFee` at least 10 times the measured fees.
-3. Register it on the canary deployment and make a canary claim that arrives.
-4. Register it on production:
+3. Add the entry to `launch()` in `contracts/script/Deploy.s.sol`.
+4. Register it on the canary deployment and make a canary claim that arrives.
+5. Register it on production: once the change is on `main`, run the **Configure contract**
+   workflow. By hand, the owner sends:
    ```sh
    cast send $FAUCET "setDestination((uint32,bool,uint8,uint8,uint128,uint128,uint128,uint128))" \
      "(<id>,true,<pasTransfer>,<pusdTransfer>,<remoteFee>,<maxDeliveryFee>,<minPas>,<minPusd>)" \
@@ -835,7 +839,7 @@ The contract above is what this repository builds today. Still to do, in order (
 with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
 
 1. **Destinations 1010, 1500, 1501 and 1502 on the live contract.** Their entries are measured on
-   the forks and in `launch()`. The owner adds them to the deployed contract with `setDestination`,
+   the forks and in `launch()`. The Configure contract workflow adds them to the deployed contract,
    and a live arrival test per chain follows. pUSD on Asset Hub Next and People Next waits for Asset
    Hub's pUSD to be registered there.
 2. **The faucet product** ([SPEC section 10](docs/SPEC.md#10-product-specification)). A candidate

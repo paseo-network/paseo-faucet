@@ -185,3 +185,30 @@ export function parsePlan(run: { transactions: ForgeTransaction[] }): DeployPlan
     calls: calls.map((t) => ({ name: t.function ?? 'call', input: t.transaction.input as Hex })),
   };
 }
+
+export interface CallPlan {
+  /** The account forge simulated as, and its nonce at the first call. */
+  sender: Address;
+  nonce: number;
+  calls: { name: string; input: Hex }[];
+}
+
+/** The transactions of a `forge script` run, checked to only call `contract`, all from one sender and without value. */
+export function parseCalls(run: { transactions: ForgeTransaction[] }, contract: Address): CallPlan {
+  const [first] = run.transactions;
+  if (!first) throw new Error('the plan has no calls');
+  const sender = first.transaction.from as Address;
+  for (const t of run.transactions) {
+    const name = t.function ?? t.transactionType;
+    if (t.transactionType !== 'CALL' || !t.transaction.to || !isAddressEqual(t.transaction.to as Address, contract)) {
+      throw new Error(`${name} is not a call to ${contract}`);
+    }
+    if (!isAddressEqual(t.transaction.from as Address, sender)) throw new Error(`${name} is sent by ${t.transaction.from}, not ${sender}`);
+    if (BigInt(t.transaction.value ?? '0x0') !== 0n) throw new Error(`${name} sends value`);
+  }
+  return {
+    sender,
+    nonce: Number(first.transaction.nonce),
+    calls: run.transactions.map((t) => ({ name: t.function ?? 'call', input: t.transaction.input as Hex })),
+  };
+}

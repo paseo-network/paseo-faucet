@@ -1,0 +1,126 @@
+name: Configure contract
+
+# Brings the deployed faucet's destinations in line with `launch()` in contracts/script/Deploy.s.sol,
+# signed by the operator account, the faucet's owner. forge simulates
+# contracts/script/Configure.s.sol as the account's Ethereum address, which plans a
+# `setDestination` for each launch entry the faucet lacks or holds differently, and
+# deploy/contract.ts sends those calls as Substrate extrinsics. A faucet already in line gets no
+# transaction. Otherwise the run simulates again and fails unless nothing is left to change.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Every deploy and keep-alive pass signs with the operator account: runs queue, never overlap, and
+# are never cancelled midway.
+concurrency:
+  group: operator
+  cancel-in-progress: false
+
+env:
+  ETH_RPC: https://eth-rpc-testnet.polkadot.io
+  PLAN: broadcast/Configure.s.sol/420420417/dry-run/run-latest.json
+
+jobs:
+  configure:
+    name: Configure
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: paseo
+    defaults:
+      run:
+        working-directory: contracts
+    env:
+      FAUCET_ADDRESS: ${{ vars.FAUCET_ADDRESS }}
+    steps:
+      - name: Require main
+        working-directory: .
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::contract changes run only from main"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.8.5
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deploy/package-lock.json
+
+      - name: Check settings
+        env:
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+        run: |
+          missing=""
+          for name in FAUCET_ADDRESS MNEMONIC; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::set these on the paseo environment:$missing"
+            exit 1
+          fi
+
+      - name: Install the deploy tooling
+        working-directory: deploy
+        run: npm ci
+
+      - name: Find the operator's Ethereum address
+        id: sender
+        working-directory: deploy
+        env:
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+        run: npx tsx contract.ts sender
+
+      # forge writes no plan when the script sends nothing, so the script's return value says how
+      # many destinations differ.
+      - name: Simulate
+        id: simulate
+        env:
+          SENDER: ${{ steps.sender.outputs.sender }}
+        run: |
+          forge script script/Configure.s.sol:Configure --rpc-url "$ETH_RPC" --sender "$SENDER" --json > "$RUNNER_TEMP/simulate.json"
+          changed=$(jq -er 'select(.returns) | .returns.changed.value' "$RUNNER_TEMP/simulate.json")
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "::notice::$changed destinations differ from launch()"
+
+      # The simulated plan only: forge's cache/ holds the RPC configuration and stays on the runner.
+      - if: steps.simulate.outputs.changed != '0'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: contract-configure
+          path: contracts/${{ env.PLAN }}
+          retention-days: 90
+
+      - name: Configure
+        id: configure
+        if: steps.simulate.outputs.changed != '0'
+        working-directory: deploy
+        env:
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+        run: npx tsx contract.ts call --plan "../contracts/$PLAN" --contract "$FAUCET_ADDRESS"
+
+      # The Ethereum RPC indexes blocks after the node does: wait until it has the calls' block.
+      - name: Check nothing is left to change
+        if: steps.simulate.outputs.changed != '0'
+        timeout-minutes: 10
+        env:
+          SENDER: ${{ steps.sender.outputs.sender }}
+          BLOCK: ${{ steps.configure.outputs.block }}
+        run: |
+          until [ "$(cast block-number --rpc-url "$ETH_RPC")" -ge "$BLOCK" ]; do sleep 6; done
+          forge script script/Configure.s.sol:Configure --rpc-url "$ETH_RPC" --sender "$SENDER" --json > "$RUNNER_TEMP/check.json"
+          left=$(jq -er 'select(.returns) | .returns.changed.value' "$RUNNER_TEMP/check.json")
+          if [ "$left" != 0 ]; then
+            echo "::error::$left destinations still differ from launch()"
+            exit 1
+          fi
