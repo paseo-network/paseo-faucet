@@ -37,17 +37,19 @@ must be identical. The contract's product ID and epoch duration are immutable.
 
 The deploys run in GitHub Actions, from a `paseo` environment holding the secrets and
 settings listed in the README's [From GitHub Actions](../README.md#from-github-actions).
-You need a funded deployer key, an owner and pauser, PAS and pUSD to fund payouts, a
-publishing account (section 2), and a compatible Polkadot host that exposes both chains
-above and a real matching People or People Lite key. Local checks need Node.js 22+, npm
-and Foundry (`forge` and `cast`).
+You need the operator account (section 2), PAS and pUSD to fund payouts, and a compatible
+Polkadot host that exposes both chains above and a real matching People or People Lite
+key. Local checks need Node.js 22+, npm and Foundry (`forge` and `cast`).
 
-## 2. Prepare the publishing account and name
+## 2. Prepare the operator account and name
 
-The app is published, and kept stored, by one account: the sr25519 root account (no
-derivation path) of the `MNEMONIC` secret on the `paseo` environment. Generate the
-mnemonic offline, store it only in that secret, and note the account's address; no step
-below needs the mnemonic again. The account must:
+One account operates the faucet: the sr25519 root account (no derivation path) of the
+`MNEMONIC` secret on the `paseo` environment. It deploys the contract, owns the product
+name, publishes the app and keeps it stored; with `OWNER` and `PAUSER` set to its Ethereum
+address it is also the owner and the pauser, so that secret controls the faucet's funds,
+its settings and its name. Generate the mnemonic offline, store it only in that secret,
+and note the account's address; no step below needs the mnemonic again. A multisig can
+take ownership later with `transferOwnership`. The account must:
 
 1. **Own the product name** on the PCF devnet DotNS: register it to the account, or
    transfer it there. Names of eight characters or fewer cannot be registered freely on
@@ -57,7 +59,8 @@ below needs the mnemonic again. The account must:
    with it. Both workflows grant or extend the authorization themselves with the
    `BULLETIN_AUTHORIZER` secret, the key URI of a Bulletin storage authorizer; on the PCF
    devnet that is `//Eve`.
-3. **Hold some PAS on Paseo Asset Hub** for the DotNS record updates.
+3. **Hold some PAS on Paseo Asset Hub**: about 1.1 PAS for each contract deploy, in fees and
+   storage deposits, and a little for the DotNS record updates.
 
 ## 3. Build and check before deployment
 
@@ -100,10 +103,10 @@ for the precompile checks and reference context vector.
 
 ## 4. Deploy and fund a canary contract
 
-Deploy the contract with the **Deploy contract** workflow, or by hand with the
-[contract deployment runbook](../README.md#calls), steps 1 to 4; then hand over
-ownership and fund it (steps 5 to 7). Use canary values, as variables on the `paseo`
-environment for the workflow or exported for the runbook:
+Deploy the contract with the **Deploy contract** workflow, or by hand with the [contract
+deployment runbook](../README.md#calls), steps 1 to 4; then fund it (steps 6 and 7), after
+`OWNER` accepts ownership (step 5) if it is not the deployer. Use canary values, as
+variables on the `paseo` environment for the workflow or exported for the runbook:
 
 ```sh
 export RPC=https://eth-rpc-testnet.polkadot.io

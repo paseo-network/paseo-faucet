@@ -1,18 +1,21 @@
 name: Deploy contract
 
-# Deploys PaseoFaucet to Paseo Asset Hub from main. contracts/script/Deploy.s.sol creates and configures
-# it with the deployer key and proposes OWNER, who accepts ownership outside CI. The source is then
-# verified on Blockscout and the commit is tagged `contract/<YYYY-MM-DD>.<n>` with the address. The
-# settings are the `paseo` environment's variables; DEPLOYER_PRIVATE_KEY is its secret.
+# Deploys PaseoFaucet to Paseo Asset Hub from main, signed by the operator account: the sr25519
+# root account of MNEMONIC, which has no Ethereum key. forge simulates
+# contracts/script/Deploy.s.sol as the account's Ethereum address, and deploy/contract.ts sends the
+# simulated transactions as Substrate extrinsics. The source is then verified on Blockscout and the
+# commit is tagged `contract/<YYYY-MM-DD>.<n>` with the address. The settings are the `paseo`
+# environment's variables.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A deploy writes on-chain state: runs queue and are never cancelled midway.
+# Every deploy and keep-alive pass signs with the operator account: runs queue, never overlap, and
+# are never cancelled midway.
 concurrency:
-  group: deploy-contract
+  group: operator
   cancel-in-progress: false
 
 env:
@@ -25,7 +28,7 @@ jobs:
     timeout-minutes: 30
     environment: paseo
     outputs:
-      faucet: ${{ steps.address.outputs.faucet }}
+      faucet: ${{ steps.deploy.outputs.faucet }}
     defaults:
       run:
         working-directory: contracts
@@ -57,12 +60,18 @@ jobs:
         with:
           version: v1.8.5
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deploy/package-lock.json
+
       - name: Check settings
         env:
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          MNEMONIC: ${{ secrets.MNEMONIC }}
         run: |
           missing=""
-          for name in PRODUCT_ID EPOCH_SECONDS MAX_DRIPS_PER_EPOCH LITE_PAS LITE_PUSD FULL_PAS FULL_PUSD OWNER PAUSER DEPLOYER_PRIVATE_KEY; do
+          for name in PRODUCT_ID EPOCH_SECONDS MAX_DRIPS_PER_EPOCH LITE_PAS LITE_PUSD FULL_PAS FULL_PUSD OWNER PAUSER MNEMONIC; do
             [ -n "${!name}" ] || missing="$missing $name"
           done
           if [ -n "$missing" ]; then
@@ -70,37 +79,71 @@ jobs:
             exit 1
           fi
 
-      # The script reads DEPLOYER_PRIVATE_KEY itself, so the key never appears in a command line.
+      - name: Install the deploy tooling
+        working-directory: deploy
+        run: npm ci
+
+      - name: Find the operator's Ethereum address
+        id: sender
+        working-directory: deploy
+        env:
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+        run: npx tsx contract.ts sender
+
       - name: Simulate
         env:
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        run: forge script script/Deploy.s.sol:Deploy --rpc-url "$ETH_RPC"
+          SENDER: ${{ steps.sender.outputs.sender }}
+        run: forge script script/Deploy.s.sol:Deploy --rpc-url "$ETH_RPC" --sender "$SENDER"
 
       - name: Deploy
+        id: deploy
+        working-directory: deploy
         env:
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        run: forge script script/Deploy.s.sol:Deploy --rpc-url "$ETH_RPC" --broadcast --slow
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+        run: npx tsx contract.ts deploy --plan ../contracts/broadcast/Deploy.s.sol/420420417/dry-run/run-latest.json
 
-      - name: Record the address
-        id: address
+      - name: Check the deployed state
+        env:
+          FAUCET: ${{ steps.deploy.outputs.faucet }}
+          SENDER: ${{ steps.sender.outputs.sender }}
         run: |
-          FAUCET=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress]
-            | if length == 1 then .[0] else error("expected one contract creation") end' \
-            broadcast/Deploy.s.sol/420420417/run-latest.json)
-          echo "faucet=$FAUCET" >> "$GITHUB_OUTPUT"
+          read_value() { cast call "$FAUCET" "$1" --rpc-url "$ETH_RPC"; }
+          expect() {
+            if [ "${2,,}" != "${3,,}" ]; then
+              echo "::error::$1 is $2, expected $3"
+              failed=1
+            fi
+          }
+          failed=0
+          expect productId "$(read_value 'productId()(string)')" "\"$PRODUCT_ID\""
+          expect epochSeconds "$(read_value 'epochSeconds()(uint64)' | cut -d' ' -f1)" "$EPOCH_SECONDS"
+          expect pauser "$(read_value 'pauser()(address)')" "$PAUSER"
+          if [ "${OWNER,,}" = "${SENDER,,}" ]; then
+            expect owner "$(read_value 'owner()(address)')" "$OWNER"
+          else
+            expect pendingOwner "$(read_value 'pendingOwner()(address)')" "$OWNER"
+          fi
+          exit "$failed"
+
+      - name: Next steps
+        env:
+          FAUCET: ${{ steps.deploy.outputs.faucet }}
+          SENDER: ${{ steps.sender.outputs.sender }}
+        run: |
           {
-            echo "### PaseoFaucet deployed at \`$FAUCET\`"
             echo
-            echo "1. \`$OWNER\` accepts ownership: \`acceptOwnership()\` on \`$FAUCET\`."
-            echo "2. Set \`FAUCET_ADDRESS\` on the \`paseo\` environment to \`$FAUCET\`, then run **Deploy app**."
-            echo "3. Fund the faucet with PAS and pUSD."
+            if [ "${OWNER,,}" != "${SENDER,,}" ]; then
+              echo "1. \`$OWNER\` accepts ownership: \`acceptOwnership()\` on \`$FAUCET\`."
+            fi
+            echo "1. Set \`FAUCET_ADDRESS\` on the \`paseo\` environment to \`$FAUCET\`, then run **Deploy app**."
+            echo "1. Fund the faucet with PAS and pUSD."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # The contract is live by now; a verification failure is reported, not fatal.
       - name: Verify the source on Blockscout
         continue-on-error: true
         env:
-          FAUCET: ${{ steps.address.outputs.faucet }}
+          FAUCET: ${{ steps.deploy.outputs.faucet }}
         run: |
           forge verify-contract "$FAUCET" src/PaseoFaucet.sol:PaseoFaucet \
             --chain 420420417 \
@@ -109,11 +152,11 @@ jobs:
             --watch \
             || { echo "::warning::source verification failed; retry it with forge verify-contract"; exit 1; }
 
-      # The broadcast record only: forge's cache/ holds the RPC configuration and stays on the runner.
+      # The simulated plan only: forge's cache/ holds the RPC configuration and stays on the runner.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: contract-deploy
-          path: contracts/broadcast/Deploy.s.sol/420420417/run-latest.json
+          path: contracts/broadcast/Deploy.s.sol/420420417/dry-run/run-latest.json
           retention-days: 90
 
   tag:
