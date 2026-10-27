@@ -6,7 +6,7 @@ import { CID } from 'multiformats/cid';
 import * as raw from 'multiformats/codecs/raw';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { signerFromMnemonic, signerFromUri } from '../keys.ts';
-import { authorizationUpkeep, decodeCar, decodeContenthash, encodeCar, parsePlan, plan, verifyBlock, walk, type Block } from '../lib.ts';
+import { authorizationUpkeep, decodeCar, decodeContenthash, encodeCar, parseCalls, parsePlan, plan, verifyBlock, walk, type Block } from '../lib.ts';
 
 async function rawBlock(text: string): Promise<Block> {
   const bytes = new TextEncoder().encode(text);
@@ -138,4 +138,20 @@ test('a deploy plan creates one contract, then only calls it, from one sender wi
   assert.throws(() => parsePlan({ transactions: [create, { ...create }] }), /is not a call to/);
   assert.throws(() => parsePlan({ transactions: [create, call(contract, { from: contract })] }), /is sent by/);
   assert.throws(() => parsePlan({ transactions: [create, call(contract, { value: '0x1' })] }), /sends value/);
+});
+
+test('a calls plan calls only the given contract, at least once, from one sender without value', () => {
+  const sender = '0x69c6813b5fa6bb299c70e4eb61e94eb17f51c6e1';
+  const contract = '0x28d5b46a1c28238748a0eda736e2a93619b555f3';
+  const call = (extra = {}, type = 'CALL') => ({ transactionType: type, function: 'setDestination((uint32))', contractAddress: contract, transaction: { from: sender, to: contract, input: '0xabcd', nonce: '0x7', value: '0x0', ...extra } });
+  assert.throws(() => parseCalls({ transactions: [] }, contract), /has no calls/);
+  assert.deepEqual(parseCalls({ transactions: [call(), call({ nonce: '0x8' })] }, contract), {
+    sender,
+    nonce: 7,
+    calls: [{ name: 'setDestination((uint32))', input: '0xabcd' }, { name: 'setDestination((uint32))', input: '0xabcd' }],
+  });
+  assert.throws(() => parseCalls({ transactions: [call({}, 'CREATE')] }, contract), /is not a call to/);
+  assert.throws(() => parseCalls({ transactions: [call({ to: sender })] }, contract), /is not a call to/);
+  assert.throws(() => parseCalls({ transactions: [call(), call({ from: contract })] }, contract), /is sent by/);
+  assert.throws(() => parseCalls({ transactions: [call({ value: '0x1' })] }, contract), /sends value/);
 });

@@ -3,20 +3,23 @@ import { parseArgs } from 'node:util';
 import { createClient, Enum, type PolkadotClient } from 'polkadot-api';
 import { getFakeTxCreator } from 'polkadot-api/tx-creator';
 import { getWsProvider } from 'polkadot-api/ws';
-import { hexToBytes, isAddressEqual, type Address } from 'viem';
+import { bytesToHex, hexToBytes, isAddress, isAddressEqual, type Address } from 'viem';
 import { operator, type Signer } from './keys.ts';
-import { parsePlan } from './lib.ts';
+import { parseCalls, parsePlan } from './lib.ts';
 import { DEVNET } from './network.ts';
 
-const USAGE = `Deploys the faucet from the operator account, the sr25519 root account of MNEMONIC, which
-has no Ethereum key: forge simulates contracts/script/Deploy.s.sol as the account's Ethereum
-address, and this sends the simulated transactions to Paseo Asset Hub as Substrate extrinsics.
+const USAGE = `Deploys and configures the faucet from the operator account, the sr25519 root account of
+MNEMONIC, which has no Ethereum key: forge simulates a script as the account's Ethereum address, and
+this sends the simulated transactions to Paseo Asset Hub as Substrate extrinsics.
 
   tsx contract.ts sender
       Print the account's Ethereum address, for \`forge script --sender\`.
   tsx contract.ts deploy --plan <broadcast/Deploy.s.sol/420420417/dry-run/run-latest.json>
       Create the contract with Revive.instantiate_with_code, then make the simulation's calls in
       one Utility.batch_all of Revive.call, each with its dry run's weight and deposit plus half.
+  tsx contract.ts call --plan <broadcast/<script>/420420417/dry-run/run-latest.json> --contract <address>
+      Make the simulation's calls to the deployed contract the same way, from the account and nonce
+      the plan was simulated with.
 
   --asset-hub <url,...>    Asset Hub endpoints, instead of Paseo's.
   --mock-signer <address>  Sign as the address with chopsticks' mock signature, on a fork.`;
@@ -60,6 +63,40 @@ function report(lines: string[]): void {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
 }
 
+interface Submitted {
+  ok: boolean;
+  dispatchError?: unknown;
+  events: unknown[];
+  block: { number: number };
+}
+
+/**
+ * Submits `tx` and waits for its block. With a mock signer, on a chopsticks fork, the extrinsic goes straight to the
+ * block builder, since the fork's pool cannot decode every Asset Hub extrinsic.
+ */
+async function submit(client: PolkadotClient, tx: { createAndSubmit(s: Signer): Promise<Submitted>; create(s: Signer, o: object): Promise<Uint8Array | string> }, signer: Signer, mock: string | undefined): Promise<Submitted> {
+  if (!mock) return tx.createAndSubmit(signer);
+  const nonce = await client._request<number, [string]>('system_accountNextIndex', [mock]);
+  const created = await tx.create(signer, { nonce, mortality: { mortal: false } });
+  const extrinsic = typeof created === 'string' ? created : bytesToHex(created);
+  const parent = await client.getFinalizedBlock();
+  const validity = await client._request<string, [string, string, string]>('state_call', [
+    'TaggedTransactionQueue_validate_transaction',
+    `0x02${extrinsic.slice(2)}${parent.hash.slice(2)}`,
+    parent.hash,
+  ]);
+  if (!validity.startsWith('0x00')) throw new Error(`the fork rejects the extrinsic: ${validity}`);
+  await client._request('dev_newBlock', [{ transactions: [extrinsic] }]);
+  const hash = await client._request<string, [number]>('chain_getBlockHash', [parent.number + 1]);
+  const { block } = await client._request<{ block: { extrinsics: string[] } }, [string]>('chain_getBlock', [hash]);
+  const index = block.extrinsics.indexOf(extrinsic);
+  if (index < 0) throw new Error(`the extrinsic is missing from block #${parent.number + 1}`);
+  const all = (await client.getUnsafeApi().query.System.Events.getValue({ at: hash })) as { phase: { type: string; value: number }; event: ChainEvent }[];
+  const events = all.filter((e) => e.phase.type === 'ApplyExtrinsic' && e.phase.value === index).map((e) => e.event);
+  const failed = events.find((e) => e.type === 'System' && e.value.type === 'ExtrinsicFailed');
+  return { ok: !failed, dispatchError: failed?.value.value?.dispatch_error, events, block: { number: parent.number + 1 } };
+}
+
 /** A connection to Paseo Asset Hub through `endpoints`, which may be a fork of it. */
 async function connect(endpoints: readonly string[]): Promise<PolkadotClient> {
   const client = createClient(getWsProvider([...endpoints]));
@@ -79,7 +116,7 @@ async function sender(client: PolkadotClient, who: string): Promise<void> {
   console.log(address);
 }
 
-async function deploy(client: PolkadotClient, who: string, signer: Signer, planPath: string): Promise<void> {
+async function deploy(client: PolkadotClient, who: string, signer: Signer, mock: string | undefined, planPath: string): Promise<void> {
   const plan = parsePlan(JSON.parse(readFileSync(planPath, 'utf8')));
   const api = client.getUnsafeApi();
   const address = (await api.apis.ReviveApi.address(who)) as Address;
@@ -98,14 +135,19 @@ async function deploy(client: PolkadotClient, who: string, signer: Signer, planP
   if (!dry.result.success) throw new Error(`the creation fails: ${show(dry.result.value)}`);
   if (dry.result.value.result.flags & REVERT) throw new Error(`the constructor reverts: ${show(dry.result.value.result.data)}`);
   if (!isAddressEqual(dry.result.value.addr, plan.contract)) throw new Error(`the creation lands at ${dry.result.value.addr}, not ${plan.contract}`);
-  const created = await api.tx.Revive.instantiate_with_code({
-    value: 0n,
-    weight_limit: weightWithHalf(dry.weight_required),
-    storage_deposit_limit: withHalf(charge(dry.max_storage_deposit)),
-    code,
-    data,
-    salt: undefined,
-  }).createAndSubmit(signer);
+  const created = await submit(
+    client,
+    api.tx.Revive.instantiate_with_code({
+      value: 0n,
+      weight_limit: weightWithHalf(dry.weight_required),
+      storage_deposit_limit: withHalf(charge(dry.max_storage_deposit)),
+      code,
+      data,
+      salt: undefined,
+    }),
+    signer,
+    mock,
+  );
   if (!created.ok) throw new Error(`the creation failed: ${show(created.dispatchError)}`);
   const instantiated = findEvent(created.events as ChainEvent[], 'Revive', 'Instantiated')?.value;
   if (!instantiated || !isAddressEqual(instantiated.contract as Address, plan.contract)) {
@@ -113,27 +155,7 @@ async function deploy(client: PolkadotClient, who: string, signer: Signer, planP
   }
   output('faucet', plan.contract);
   console.log(`created ${plan.contract} in block ${created.block.number}`);
-
-  const calls = [];
-  for (const call of plan.calls) {
-    const input = hexToBytes(call.input);
-    const sim = (await api.apis.ReviveApi.call(who, plan.contract, 0n, undefined, undefined, input)) as DryRun<Returned>;
-    if (!sim.result.success) throw new Error(`${call.name} fails: ${show(sim.result.value)}`);
-    if (sim.result.value.flags & REVERT) throw new Error(`${call.name} reverts: ${show(sim.result.value.data)}`);
-    calls.push(
-      api.tx.Revive.call({
-        dest: plan.contract,
-        value: 0n,
-        weight_limit: weightWithHalf(sim.weight_required),
-        storage_deposit_limit: withHalf(charge(sim.max_storage_deposit)),
-        data: input,
-      }).decodedCall,
-    );
-  }
-  const configured = await api.tx.Utility.batch_all({ calls }).createAndSubmit(signer);
-  if (!configured.ok || !findEvent(configured.events as ChainEvent[], 'Utility', 'BatchCompleted')) {
-    throw new Error(`the configuration failed: ${show(configured.ok ? 'no BatchCompleted event' : configured.dispatchError)}`);
-  }
+  const configured = await makeCalls(client, who, signer, mock, plan.contract, plan.calls);
 
   const after = ((await api.query.System.Account.getValue(who)) as Balances).data;
   report([
@@ -143,7 +165,55 @@ async function deploy(client: PolkadotClient, who: string, signer: Signer, planP
     '|---|---|',
     `| Deployer | ${who} (\`${address}\`) |`,
     `| Created | block ${created.block.number} |`,
-    `| Configured | ${plan.calls.length} calls in block ${configured.block.number}: ${plan.calls.map((c) => c.name.split('(')[0]).join(', ')} |`,
+    `| Configured | ${plan.calls.length} calls in block ${configured}: ${plan.calls.map((c) => c.name.split('(')[0]).join(', ')} |`,
+    `| Spent | ${before.free - after.free} plancks in fees and storage deposits |`,
+  ]);
+}
+
+/** Dry-runs each call, then makes them all in one Utility.batch_all of Revive.call; answers the block it landed in. */
+async function makeCalls(client: PolkadotClient, who: string, signer: Signer, mock: string | undefined, contract: Address, plan: { name: string; input: `0x${string}` }[]): Promise<number> {
+  const api = client.getUnsafeApi();
+  const calls = [];
+  for (const call of plan) {
+    const input = hexToBytes(call.input);
+    const sim = (await api.apis.ReviveApi.call(who, contract, 0n, undefined, undefined, input)) as DryRun<Returned>;
+    if (!sim.result.success) throw new Error(`${call.name} fails: ${show(sim.result.value)}`);
+    if (sim.result.value.flags & REVERT) throw new Error(`${call.name} reverts: ${show(sim.result.value.data)}`);
+    calls.push(
+      api.tx.Revive.call({
+        dest: contract,
+        value: 0n,
+        weight_limit: weightWithHalf(sim.weight_required),
+        storage_deposit_limit: withHalf(charge(sim.max_storage_deposit)),
+        data: input,
+      }).decodedCall,
+    );
+  }
+  const result = await submit(client, api.tx.Utility.batch_all({ calls }), signer, mock);
+  if (!result.ok || !findEvent(result.events as ChainEvent[], 'Utility', 'BatchCompleted')) {
+    throw new Error(`the calls failed: ${show(result.ok ? 'no BatchCompleted event' : result.dispatchError)}`);
+  }
+  return result.block.number;
+}
+
+async function call(client: PolkadotClient, who: string, signer: Signer, mock: string | undefined, planPath: string, contract: Address): Promise<void> {
+  const plan = parseCalls(JSON.parse(readFileSync(planPath, 'utf8')), contract);
+  const api = client.getUnsafeApi();
+  const address = (await api.apis.ReviveApi.address(who)) as Address;
+  if (!isAddressEqual(address, plan.sender)) throw new Error(`${who} is ${address}, but the plan was simulated as ${plan.sender}`);
+  const nonce = Number(await api.apis.AccountNonceApi.account_nonce(who));
+  if (nonce !== plan.nonce) throw new Error(`${who} is at nonce ${nonce}, but the plan starts at nonce ${plan.nonce}: simulate again`);
+  const before = ((await api.query.System.Account.getValue(who)) as Balances).data;
+  const block = await makeCalls(client, who, signer, mock, contract, plan.calls);
+  const after = ((await api.query.System.Account.getValue(who)) as Balances).data;
+  output('block', String(block));
+  report([
+    `### PaseoFaucet \`${contract}\` configured`,
+    '',
+    '| | |',
+    '|---|---|',
+    `| Signer | ${who} (\`${address}\`) |`,
+    `| Calls | ${plan.calls.length} in block ${block}: ${plan.calls.map((c) => c.name.split('(')[0]).join(', ')} |`,
     `| Spent | ${before.free - after.free} plancks in fees and storage deposits |`,
   ]);
 }
@@ -152,12 +222,14 @@ const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
     plan: { type: 'string' },
+    contract: { type: 'string' },
     'asset-hub': { type: 'string' },
     'mock-signer': { type: 'string' },
   },
 });
 const [command] = positionals;
-if (!(command === 'sender' || (command === 'deploy' && values.plan))) {
+const valid = command === 'sender' || (command === 'deploy' && values.plan) || (command === 'call' && values.plan && values.contract && isAddress(values.contract));
+if (!valid) {
   console.error(USAGE);
   process.exit(2);
 }
@@ -167,7 +239,8 @@ try {
   const client = await connect(values['asset-hub'] ? values['asset-hub'].split(',') : DEVNET.assetHub);
   try {
     if (command === 'sender') await sender(client, address);
-    else await deploy(client, address, signer, values.plan!);
+    else if (command === 'deploy') await deploy(client, address, signer, mock, values.plan!);
+    else await call(client, address, signer, mock, values.plan!, values.contract as Address);
   } finally {
     client.destroy();
   }
