@@ -620,17 +620,17 @@ cast chain-id --rpc-url $RPC
 ### Calls
 
 Run from `contracts/`. `Deploy.s.sol` reads every setting from the environment and aborts on a
-missing or out-of-range value. The amounts below are the illustrative budget in SPEC section
-11, not a decision.
+missing or out-of-range value. The amounts below are the launch settings (D-03); the epoch
+cap is still open, and 4294967295 sets none.
 
 ```sh
 export RPC=https://eth-rpc-testnet.polkadot.io
 export PRODUCT_ID=faucet.dot          # the DotNS name the product is served from
 export EPOCH_SECONDS=86400
 export MAX_DRIPS_PER_EPOCH=1000
-export LITE_PAS=250000000000          # plancks: 25 PAS
-export LITE_PUSD=25000000             # base units: 25 pUSD
-export FULL_PAS=5000000000000         # 500 PAS
+export LITE_PAS=5000000000000         # plancks: 500 PAS
+export LITE_PUSD=100000000            # base units: 100 pUSD
+export FULL_PAS=50000000000000        # 5,000 PAS
 export FULL_PUSD=500000000            # 500 pUSD
 export PAUSER=0x...
 export OWNER=0x...
@@ -856,17 +856,18 @@ explains each case and its fix.
 These are the operator's calls; [SPEC section 16](docs/SPEC.md#16-open-decisions) has the
 options and recommendations.
 
-- **Open:** D-03 amounts, epoch length and cap, D-06 pUSD source, D-07 the legacy faucet and
-  Matrix bot, D-08 owner multisig and pauser, D-10 the Paseo lite registration fee.
-- **Decided:** D-01 `faucet.dot` as the product name, D-02 `personhoodInfoByProof`, D-04
-  per-epoch contexts, D-05 XCM payout, D-09 Solidity to EVM bytecode with Foundry, D-11 one
-  claim per person per epoch in total, D-12 pay what is available on every enabled destination
-  (REQ-18), D-13 internal review plus one external review before raising balances, D-15 the
-  owner is the one privileged origin and manages the whitelist (no proof, a cap per account per
-  epoch), D-16 an 83-byte message without a destination and a revert when a claim can pay
-  nothing. The launch set is Asset Hub, People, Bulletin, Asset Hub Next, Bulletin Next and
-  People Next System; Coretime and Bridge Hub are not part of the Paseo relay and are out of
-  scope.
+- **Open:** D-03 the epoch cap, D-06 pUSD source, D-07 the legacy faucet and Matrix bot, D-10
+  the Paseo lite registration fee.
+- **Decided:** D-01 `faucet.dot` as the product name, D-02 `personhoodInfoByProof`, D-03 per
+  chain 5,000 PAS and 500 pUSD for full persons and 500 PAS and 100 pUSD for lite persons, in
+  24-hour epochs, D-04 per-epoch contexts, D-05 XCM payout, D-08 the operator account as owner
+  and pauser, D-09 Solidity to EVM bytecode with Foundry, D-11 one claim per person per epoch in
+  total, D-12 pay what is available on every enabled destination (REQ-18), D-13 internal review
+  plus one external review before raising balances, D-15 the owner is the one privileged origin
+  and manages the whitelist (no proof, a cap per account per epoch), D-16 an 83-byte message
+  without a destination and a revert when a claim can pay nothing. The launch set is Asset Hub,
+  People, Bulletin, Asset Hub Next, Bulletin Next and People Next System; Coretime and Bridge
+  Hub are not part of the Paseo relay and are out of scope.
 
 ## Documents
 
