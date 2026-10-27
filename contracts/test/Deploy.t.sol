@@ -18,7 +18,6 @@ contract DeployTest is Test {
         vm.setEnv("FULL_PUSD", "500000000");
         vm.setEnv("PAUSER", vm.toString(pauser));
         vm.setEnv("OWNER", vm.toString(owner));
-        vm.setEnv("DEPLOYER_PRIVATE_KEY", "0");
         Deploy deploy = new Deploy();
 
         PaseoFaucet faucet = deploy.run();
@@ -40,9 +39,12 @@ contract DeployTest is Test {
         assertEq(abi.encode(launch[0].id, launch[1].id), abi.encode(1000, 1004));
         assertTrue(launch[0].enabled && launch[1].enabled);
 
-        (address deployer, uint256 deployerKey) = makeAddrAndKey("deployer");
-        vm.setEnv("DEPLOYER_PRIVATE_KEY", vm.toString(bytes32(deployerKey)));
-        assertEq(deploy.run().owner(), deployer);
+        assertEq(faucet.owner(), DEFAULT_SENDER);
+
+        vm.setEnv("OWNER", vm.toString(DEFAULT_SENDER));
+        faucet = deploy.run();
+        assertEq(faucet.owner(), DEFAULT_SENDER);
+        assertEq(faucet.pendingOwner(), address(0));
 
         vm.setEnv("EPOCH_SECONDS", "18446744073709551616");
         vm.expectRevert(bytes("EPOCH_SECONDS is out of range"));

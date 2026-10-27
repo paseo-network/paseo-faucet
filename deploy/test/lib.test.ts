@@ -5,8 +5,8 @@ import { CarWriter } from '@ipld/car';
 import { CID } from 'multiformats/cid';
 import * as raw from 'multiformats/codecs/raw';
 import { sha256 } from 'multiformats/hashes/sha2';
-import { signerFromMnemonic, signerFromUri } from '../bulletin.ts';
-import { authorizationUpkeep, decodeCar, decodeContenthash, encodeCar, plan, verifyBlock, walk, type Block } from '../lib.ts';
+import { signerFromMnemonic, signerFromUri } from '../keys.ts';
+import { authorizationUpkeep, decodeCar, decodeContenthash, encodeCar, parsePlan, plan, verifyBlock, walk, type Block } from '../lib.ts';
 
 async function rawBlock(text: string): Promise<Block> {
   const bytes = new TextEncoder().encode(text);
@@ -119,4 +119,23 @@ test('a key URI derives its path, from the development phrase when it starts wit
   assert.equal(signerFromUri('bottom drive obey lake curtain smoke basket hold race lonely fit walk//Eve').address, eve);
   assert.equal(signerFromUri('bottom drive obey lake curtain smoke basket hold race lonely fit walk').address, '5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV');
   assert.throws(() => signerFromUri('not a uri//Eve'));
+});
+
+test('a deploy plan creates one contract, then only calls it, from one sender without value', () => {
+  const sender = '0x69c6813b5fa6bb299c70e4eb61e94eb17f51c6e1';
+  const contract = '0x0d84e053e5ac065c4caa3c5dc67eb1f63b93e533';
+  const create = { transactionType: 'CREATE', function: null, contractAddress: contract, transaction: { from: sender, to: null, input: '0x60a0', nonce: '0x0', value: '0x0' } } as const;
+  const call = (to: string, extra = {}) => ({ transactionType: 'CALL', function: 'setPauser(address)', contractAddress: to, transaction: { from: sender, to, input: '0x1234', nonce: '0x1', value: '0x0', ...extra } });
+  assert.deepEqual(parsePlan({ transactions: [create, call(contract)] }), {
+    sender,
+    nonce: 0,
+    contract,
+    initcode: '0x60a0',
+    calls: [{ name: 'setPauser(address)', input: '0x1234' }],
+  });
+  assert.throws(() => parsePlan({ transactions: [call(contract)] }), /does not start with a contract creation/);
+  assert.throws(() => parsePlan({ transactions: [create, call('0x0000000000000000000000000000000000000001')] }), /is not a call to/);
+  assert.throws(() => parsePlan({ transactions: [create, { ...create }] }), /is not a call to/);
+  assert.throws(() => parsePlan({ transactions: [create, call(contract, { from: contract })] }), /is sent by/);
+  assert.throws(() => parsePlan({ transactions: [create, call(contract, { value: '0x1' })] }), /sends value/);
 });

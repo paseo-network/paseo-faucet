@@ -10,10 +10,10 @@ on:
 permissions:
   contents: read
 
-# Deploys and keep-alive passes store with the same account: runs queue, never overlap, and are
-# never cancelled midway.
+# Every deploy and keep-alive pass signs with the operator account: runs queue, never overlap, and
+# are never cancelled midway.
 concurrency:
-  group: app-on-bulletin
+  group: operator
   cancel-in-progress: false
 
 env:

@@ -1,10 +1,12 @@
 /**
- * The network the app is published on, the PCF devnet: names on Paseo Asset Hub, storage on Bulletin
- * (para 1010). The DotNS registry, the IPFS gateway and the Bulletin endpoints are the `devnet`
- * environment of @polkadot-community-foundation/polkadot-app-deploy 0.16.7, the tool deploy-app.yml
- * publishes with.
+ * The network the faucet runs on, the PCF devnet: the contract and the names on Paseo Asset Hub,
+ * storage on Bulletin (para 1010). The DotNS registry, the IPFS gateway and the Bulletin endpoints
+ * are the `devnet` environment of @polkadot-community-foundation/polkadot-app-deploy 0.16.7, the
+ * tool deploy-app.yml publishes with.
  */
 export const DEVNET = {
+  assetHub: ['wss://asset-hub-paseo-rpc.n.dwellir.com', 'wss://sys.turboflakes.io/asset-hub-paseo'],
+  assetHubGenesis: '0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2',
   /** Paseo Asset Hub's Ethereum RPC, for DotNS reads. */
   ethRpc: 'https://eth-rpc-testnet.polkadot.io',
   dotnsRegistry: '0xb052E5EfC5ADEff1f21d48DEfb5169Cb394A1a73',

@@ -371,7 +371,7 @@ contracts/                      Foundry project; forge-std is a git submodule in
   test/                         unit tests with the precompiles mocked at their addresses, golden XCM vectors, a deploy test
   test/harness/FaucetHarness.sol  test-only subclass with owner-only pay() and dripWithoutProof(); for the fork check, never for real funds
 frontend/                       Paseo-only static UI, Product SDK integration, unit and browser tests
-deploy/                         keep-alive tool for the published app: archive, status, restore, authorize (keepalive.ts)
+deploy/                         deploy tooling: the contract deploy as the operator account (contract.ts); the app's archive, status, restore and authorize (keepalive.ts)
 fork/                           fork check: chopsticks forks of the Paseo chains, driven with papi and viem
   check.ts                      the checks; writes docs/evidence/fork-check.json
   lib.ts                        fork, transaction and contract helpers
@@ -476,16 +476,16 @@ not cover.
 
 ## Deployment
 
-GitHub Actions deploys the contract, publishes the app and keeps it stored, from `main`.
-[Deploy and test the Paseo faucet](docs/DEPLOYMENT.md) is the full sequence, from the
-publishing account to a real proof-of-personhood claim; the contract runbook below is what
-the contract workflow runs, and works by hand too.
+GitHub Actions deploys the contract, publishes the app and keeps it stored, from `main`, all
+signed by one operator account. [Deploy and test the Paseo faucet](docs/DEPLOYMENT.md) is the
+full sequence, from the operator account to a real proof-of-personhood claim. The contract
+runbook below deploys the same script by hand with an Ethereum key.
 
 ### From GitHub Actions
 
 | Workflow | Runs | Does |
 |---|---|---|
-| Deploy contract (`deploy-contract.yml`) | dispatched on `main` | simulates and broadcasts `Deploy.s.sol` on Paseo Asset Hub, verifies the source on Blockscout, and tags the commit `contract/<YYYY-MM-DD>.<n>` with the address |
+| Deploy contract (`deploy-contract.yml`) | dispatched on `main` | simulates `Deploy.s.sol` as the operator account's Ethereum address, sends the simulated transactions to Paseo Asset Hub as Substrate extrinsics signed by that account (`deploy/contract.ts`), checks the deployed settings, verifies the source on Blockscout, and tags the commit `contract/<YYYY-MM-DD>.<n>` with the address |
 | Deploy app (`deploy-app.yml`) | dispatched on `main` | checks that `FAUCET_ADDRESS` is a `paseo-faucet:v2` contract for `PRODUCT_ID`, builds `frontend/`, publishes it under `PRODUCT_ID` on the PCF devnet with `polkadot-app-deploy`, and releases an archive of every block the name points at as `app/<YYYY-MM-DD>.<n>` |
 | Keep app alive (`keep-app-alive.yml`) | every day, and on demand with `force` | stores the latest `app/*` release's blocks again once the oldest is 13 days old or one is missing ([below](#keeping-the-app-stored)) |
 
@@ -495,18 +495,19 @@ an approval every day.
 
 | Name | Kind | Used by | Value |
 |---|---|---|---|
-| `DEPLOYER_PRIVATE_KEY` | secret | Deploy contract | the deployer's Ethereum private key, funded with a few PAS. `Deploy.s.sol` reads it from the environment, so it appears in no command line or log. |
-| `MNEMONIC` | secret | Deploy app, Keep app alive | the publishing account: its sr25519 root account owns `PRODUCT_ID` and stores the app on Bulletin 1010 ([DEPLOYMENT.md](docs/DEPLOYMENT.md#2-prepare-the-publishing-account-and-name)) |
-| `BULLETIN_AUTHORIZER` | secret | Deploy app, Keep app alive | the key URI of a Bulletin 1010 storage authorizer (`//Eve` on the PCF devnet), which grants or extends the publishing account's storage authorization |
+| `MNEMONIC` | secret | all three | the operator account: its sr25519 root account deploys the contract, owns `PRODUCT_ID` and stores the app on Bulletin 1010 ([DEPLOYMENT.md](docs/DEPLOYMENT.md#2-prepare-the-operator-account-and-name)) |
+| `BULLETIN_AUTHORIZER` | secret | Deploy app, Keep app alive | the key URI of a Bulletin 1010 storage authorizer (`//Eve` on the PCF devnet), which grants or extends the operator account's storage authorization |
 | `PRODUCT_ID` | variable | all three | the DotNS name the app is served from, which is also the contract's `productId` |
-| `EPOCH_SECONDS`, `MAX_DRIPS_PER_EPOCH`, `LITE_PAS`, `LITE_PUSD`, `FULL_PAS`, `FULL_PUSD`, `OWNER`, `PAUSER` | variables | Deploy contract | as in [Calls](#calls) |
+| `EPOCH_SECONDS`, `MAX_DRIPS_PER_EPOCH`, `LITE_PAS`, `LITE_PUSD`, `FULL_PAS`, `FULL_PUSD` | variables | Deploy contract | as in [Calls](#calls) |
+| `OWNER`, `PAUSER` | variables | Deploy contract | the owner and the pauser. The operator account's Ethereum address, which the run prints, makes it both, with no handover; any other `OWNER` accepts ownership after the deploy (step 5 of [Calls](#calls)) |
 | `FAUCET_ADDRESS` | variable | Deploy app | the deployed contract, from the Deploy contract run's summary |
 
-The order is: Deploy contract; `OWNER` accepts ownership (step 5 of [Calls](#calls)), after
-which the deployer key controls nothing; set `FAUCET_ADDRESS`; fund the faucet (steps 6
-and 7); Deploy app; then Keep app alive once with `force`, to check the publishing
-account's storage authorization end to end. The workflows print no secret, and only the
-release and tag jobs, which hold none, can write to the repository.
+The order is: Deploy contract; when `OWNER` is not the operator, `OWNER` accepts ownership
+(step 5 of [Calls](#calls)); set `FAUCET_ADDRESS`; fund the faucet (steps 6 and 7); Deploy
+app; then Keep app alive once with `force`, to check the operator account's storage
+authorization end to end. All three workflows share one concurrency group, since they sign
+with the same account. The workflows print no secret, and only the release and tag jobs,
+which hold none, can write to the repository.
 
 ### Keeping the app stored
 
@@ -524,7 +525,7 @@ authorization, and checks afterwards that every block was stored again.
 
 Storage authorizations last 14 days as well (`AuthorizationPeriod`). Before storing, both
 workflows run `keepalive.ts authorize`, signed by `BULLETIN_AUTHORIZER`: it grants the
-publishing account an authorization when it has none or its grant has expired, and extends
+operator account an authorization when it has none or its grant has expired, and extends
 the grant once fewer than 3 days are left. Since Keep app alive runs every day, the
 account's authorization never lapses. To look by hand:
 
@@ -538,10 +539,10 @@ npx tsx keepalive.ts status --name <name> --car app.car
 ### Goal and scope
 
 Deploy `PaseoFaucet` to Paseo Asset Hub, configure tiers, cap, pauser and the launch
-destinations (Asset Hub and People), hand ownership to the owner, verify the source on
-Blockscout, fund it, and prove it with a canary claim. Run the whole runbook first as a canary
-deployment (small balances, a short epoch), and run it for production only after a canary
-claim to every enabled destination has arrived.
+destinations (Asset Hub and People), hand ownership to the owner if it is not the deployer,
+verify the source on Blockscout, fund it, and prove it with a canary claim. Run the whole
+runbook first as a canary deployment (small balances, a short epoch), and run it for production
+only after a canary claim to every enabled destination has arrived.
 
 ### State affected
 
@@ -549,7 +550,8 @@ claim to every enabled destination has arrived.
   followed by twelve `0xEE` bytes. The deployer pays the fees and storage deposits.
 - Contract storage written by the script: `productId` and `owner` (constructor), `tiers(1)`,
   `tiers(2)`, `maxDripsPerEpoch`, `pauser`, `destination(1000)`, `destination(1004)` and the
-  id list, and `pendingOwner`. `owner` stays the deployer until `acceptOwnership`.
+  id list, and, when `OWNER` is not the deployer, `pendingOwner`; `owner` stays the deployer
+  until `acceptOwnership`.
 - Balances: the deployer's PAS; the faucet's PAS (`System.Account`) and pUSD
   (`Assets.Account(50000413, …)`) once funded.
 - Nothing on People or any other chain changes until the first remote drip.
@@ -606,9 +608,9 @@ export OWNER=0x...
    ```sh
    cast wallet import deployer --interactive
    ```
-2. Simulate. Nothing is sent; forge prints `SIMULATION COMPLETE` and eight transactions: the
-   creation, `setTier` twice, `setMaxDripsPerEpoch`, `setPauser`, `setDestination` twice and
-   `transferOwnership`.
+2. Simulate. Nothing is sent; forge prints `SIMULATION COMPLETE` and the transactions: the
+   creation, `setTier` twice, `setMaxDripsPerEpoch`, `setPauser`, `setDestination` twice and,
+   when `OWNER` is not the deployer, `transferOwnership`.
    ```sh
    forge script script/Deploy.s.sol:Deploy --rpc-url $RPC --account deployer
    ```
@@ -627,7 +629,7 @@ export OWNER=0x...
      --constructor-args $(cast abi-encode "constructor(string,uint64)" "$PRODUCT_ID" "$EPOCH_SECONDS") \
      --watch
    ```
-5. The owner accepts. With an Ethereum key:
+5. When `OWNER` is not the deployer, the owner accepts. With an Ethereum key:
    ```sh
    cast send $FAUCET "acceptOwnership()" --rpc-url $RPC --account owner
    ```
