@@ -19,7 +19,7 @@ function emitted(eventName: 'Dripped' | 'DripSkipped', destinationId: number, va
     : encodeAbiParameters([{ type: 'uint8' }, { type: 'bytes32' }, { type: 'uint8' }], [2, alias, Number(values[0])]);
   return { type: 'Revive', value: { type: 'ContractEmitted', value: { contract: from, data: hexToBytes(data), topics } } };
 }
-function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; login?: { response?: string; error?: unknown } } = {}) {
+function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean } = {}) {
   const calls: string[] = [];
   const statusListeners = new Set<(status: string) => void>();
   let proofs = 0, txs = 0, drys = 0;
@@ -111,7 +111,7 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
     isContractAccountMapped: async () => ({ ok: true, value: options.mapped !== false }),
     ensureContractAccountMapped: async () => { calls.push('map'); return { ok: true }; },
     createContractFromClient: (_client: unknown, _descriptor: unknown, _address: unknown, _abi: unknown, defaults: { defaultOrigin?: string }) => { origins.push(defaults.defaultOrigin); return faucet; },
-    requestResourceAllocation: async () => { calls.push('pgas'); return { ok: true, value: ['Allocated'] }; },
+    requestResourceAllocation: async () => { calls.push('pgas'); return options.stuckAllocation ? new Promise(() => {}) : { ok: true, value: ['Allocated'] }; },
   } as unknown as FaucetDependencies;
   return {
     dependencies, calls, origins, statusListeners,
@@ -133,14 +133,18 @@ test('claim forwards the v2 ABI, SCALE proof and product signer, and reports wha
   const mock = setup();
   const host = await open(mock);
   const faucet = (await host.connect())!;
-  const receipt = await faucet.claim(recipient, () => {});
+  const progress: string[] = [];
+  const receipt = await faucet.claim(recipient, (message) => progress.push(message));
   assert.deepEqual(mock.calls.slice(1), ['connect', 'pgas', 'proof', 'dry', 'tx']);
   assert.deepEqual(mock.messageArgs, [20000n, recipient]);
   const args = mock.transactionArgs;
   assert.equal(args[0], 2); assert.equal(args[1], recipient);
   assert.equal((args[2] as string).slice(0, 6), '0x450c');
   assert.equal(args[3], alias); assert.equal(args[4], 3); assert.equal(args[5], 57);
-  assert.deepEqual(args[6], { signer: 'product-signer', waitFor: 'finalized' });
+  const { onStatus, ...submit } = args[6] as { onStatus: (status: string) => void };
+  assert.deepEqual(submit, { signer: 'product-signer', waitFor: 'finalized' });
+  onStatus('broadcasting'); onStatus('in-block');
+  assert.deepEqual(progress.slice(-2), ['Submitting the claim', 'Waiting for finality']);
   assert.deepEqual(receipt, {
     txHash: `0x${'aa'.repeat(32)}`, recipient,
     paid: [{ id: 1000, pas: 250000000000n, pusd: 25000000n }],
@@ -213,6 +217,15 @@ test('accounts with enough PGAS do not consume another host allocation', async (
   const mock = setup({ pgasBalance: 30_000_000_000n });
   await (await connect(mock)).claim(recipient, () => {});
   assert.deepEqual(mock.calls.slice(2), ['proof', 'dry', 'tx']);
+});
+test('a host step that never answers fails the claim and names the step', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const mock = setup({ stuckAllocation: true });
+  const claim = (await connect(mock)).claim(recipient, () => {});
+  while (!mock.calls.includes('pgas')) await new Promise(setImmediate);
+  t.mock.timers.tick(120_000);
+  await assert.rejects(claim, /^Error: Preparing transaction fees took too long\. Please try again\.$/);
+  assert.equal(mock.counts.txs, 0);
 });
 test('NotMember permits a lite fallback, while host permission failures stop immediately', async () => {
   const lite = setup({ fullNotMember: true });
