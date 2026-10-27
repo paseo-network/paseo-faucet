@@ -20,94 +20,44 @@ not evidence of a real host proof or remote token arrival.
 | People genesis | `0xe6c30d6e148f250b887105237bcaa5cb9f16dd203bf7b5b9d4f1da7387cb86ec` |
 | SDK descriptor | `devnet_asset_hub`, checked against that genesis |
 | Contract domain | `paseo-faucet:v2` |
+| App names and storage | the PCF devnet: DotNS v1.0.0 on Paseo Asset Hub (registry `0xb052E5EfC5ADEff1f21d48DEfb5169Cb394A1a73`), storage on Bulletin, para 1010 |
+| Publishing tool | `@polkadot-community-foundation/polkadot-app-deploy` 0.16.7, environment `devnet` |
+| Gateways | IPFS `https://devnet-ipfs.api.polkadotcommunity.foundation`, web `dev-dot.li` |
 
-The current Apps documentation targets **Paseo Next v2**, with `.paseo` names and
-a different genesis. Its default publishing commands do not target this contract
-network. Do not switch only the RPC, use mainnet, or bypass genesis checks to make
+The PCF devnet runs on the public Paseo system chains: the same Asset Hub and People as the
+contract and the frontend's descriptor. The current Apps documentation targets **Paseo
+Next v2**, with `.paseo` names and a different genesis; its default publishing commands do
+not target this network. Do not switch only the RPC, use mainnet, or bypass genesis checks to make
 the app connect. Migrating networks requires reviewing descriptors, precompiles,
 proof collections, product identity and XCM destinations together.
 
-Reserve a product name you control on the host's public-Paseo DotNS deployment
-before deploying the contract. `faucet.dot` is an example, not an assigned name.
+Reserve a product name on the PCF devnet DotNS before deploying the contract. `faucet.dot` is an example, not an assigned name.
 The actual host product ID, contract `productId()` and frontend `VITE_PRODUCT_ID`
 must be identical. The contract's product ID and epoch duration are immutable.
 
-You need Node.js 22+, npm, Foundry (`forge` and `cast`), a funded deployer, an owner
-and pauser, PAS and pUSD to fund payouts, a DotNS publishing account with Bulletin
-storage authorization, and a compatible Polkadot host. The host must expose both
-public-Paseo chains above and a real matching People or People Lite key.
+The deploys run in GitHub Actions, from a `paseo` environment holding the secrets and
+settings listed in the README's [From GitHub Actions](../README.md#from-github-actions).
+You need a funded deployer key, an owner and pauser, PAS and pUSD to fund payouts, a
+publishing account (section 2), and a compatible Polkadot host that exposes both chains
+above and a real matching People or People Lite key. Local checks need Node.js 22+, npm
+and Foundry (`forge` and `cast`).
 
 ## 2. Prepare the publishing account and name
 
-The published `@parity/dotns-cli@0.6.1` bundle contains the matching public-Paseo
-descriptor and legacy DotNS addresses. Its command help and bundled configuration
-were inspected for this guide. These publication transactions have **not** been
-tested end to end here. Confirm with the host operator that this legacy DotNS and
-Bulletin deployment is still supported before paying for registration.
+The app is published, and kept stored, by one account: the sr25519 root account (no
+derivation path) of the `MNEMONIC` secret on the `paseo` environment. Generate the
+mnemonic offline, store it only in that secret, and note the account's address; no step
+below needs the mnemonic again. The account must:
 
-Use this isolated bundle so it does not replace an installed newer CLI:
-
-```sh
-export DOTNS_TOOL_DIR="$(mktemp -d)"
-npm pack @parity/dotns-cli@0.6.1 --pack-destination "$DOTNS_TOOL_DIR" --ignore-scripts
-tar -xzf "$DOTNS_TOOL_DIR/parity-dotns-cli-0.6.1.tgz" -C "$DOTNS_TOOL_DIR"
-dotns() { node "$DOTNS_TOOL_DIR/package/dist/cli.js" "$@"; }
-dotns --version
-export DOTNS_RPC=wss://asset-hub-paseo-rpc.n.dwellir.com
-```
-
-This version uses public Paseo directly; it does not take the modern `--env paseo-v2`
-flag. Its bundled registrar controller is
-`0xd09e0F1c1E6CE8Cf40df929ef4FC778629573651`. Check it has code on the contract
-RPC and that the host resolves names through this same deployment. If it does not,
-obtain the supported legacy deployment/tooling from the host operator; a newer CLI
-with a public-Paseo RPC override retains its newer contract addresses.
-
-```sh
-cast code 0xd09e0F1c1E6CE8Cf40df929ef4FC778629573651 \
-  --rpc-url https://eth-rpc-testnet.polkadot.io
-```
-
-This should return non-empty bytecode, not `0x`. Code presence alone does not
-establish ABI compatibility or host support.
-
-Import your publishing account using the interactive secret and password prompts:
-
-```sh
-dotns auth set --account publisher
-dotns account address --account publisher
-dotns account info --account publisher
-dotns account map --account publisher
-```
-
-Fund that account on public Paseo for mapping, registration and record updates.
-Skip mapping if it is already mapped. Request Bulletin storage authorization for
-the same Substrate account from the public-Paseo Bulletin operator, then check it:
-
-```sh
-dotns bulletin status --account publisher
-```
-
-The CLI's administrative `bulletin authorize` command requires privileged access;
-an ordinary publisher cannot grant itself storage. Likewise, `pop set` in this old
-CLI is not a way to obtain a real ring key or a faucet proof.
-
-For a name you already own, check ownership. Otherwise register an available label
-for which your account meets the registrar's rules:
-
-```sh
-export PRODUCT_LABEL=replace-with-your-label
-export PRODUCT_ID="$PRODUCT_LABEL.dot"
-dotns lookup owner-of "$PRODUCT_LABEL"
-# Only if the label is available and you intend to register it:
-dotns register domain --name "$PRODUCT_LABEL" --account publisher
-dotns lookup owner-of "$PRODUCT_LABEL"
-```
-
-Registration may require an operator grant or personhood depending on the name.
-Confirm the host reports exactly `$PRODUCT_ID` before continuing. Keep this shell
-open for the remaining commands; reconnecting requires restoring the variables
-and the `dotns` function.
+1. **Own the product name** on the PCF devnet DotNS: register it to the account, or
+   transfer it there. Names of eight characters or fewer cannot be registered freely on
+   DotNS v1.0.0; Root grants them. `polkadot-app-deploy` writes the name's records as its
+   owner.
+2. **Be authorized to store on Bulletin 1010.** The deploy and every keep-alive pass store
+   with it. Both workflows grant or extend the authorization themselves with the
+   `BULLETIN_AUTHORIZER` secret, the key URI of a Bulletin storage authorizer; on the PCF
+   devnet that is `//Eve`.
+3. **Hold some PAS on Paseo Asset Hub** for the DotNS record updates.
 
 ## 3. Build and check before deployment
 
@@ -150,9 +100,10 @@ for the precompile checks and reference context vector.
 
 ## 4. Deploy and fund a canary contract
 
-Deploy, verify, hand over ownership and fund the contract with the
-[contract deployment runbook](../README.md#calls), steps 1 to 7, in the same shell
-(`PRODUCT_ID` is already set) and with canary values:
+Deploy the contract with the **Deploy contract** workflow, or by hand with the
+[contract deployment runbook](../README.md#calls), steps 1 to 4; then hand over
+ownership and fund it (steps 5 to 7). Use canary values, as variables on the `paseo`
+environment for the workflow or exported for the runbook:
 
 ```sh
 export RPC=https://eth-rpc-testnet.polkadot.io
@@ -171,8 +122,8 @@ These are canary examples, not production budgets. The script enables both tiers
 registers Asset Hub and People, so one claim pays both: it needs the tier's PAS twice,
 People's `maxDeliveryFee` (0.5 PAS) of delivery headroom, and the tier's pUSD twice. A
 chain the faucet cannot fund is skipped (`DripSkipped`), and pUSD it lacks is left out.
-Fund about 100 PAS and 10 pUSD rather than the runbook's 1,000 of each, and export the
-deployed address as `FAUCET`.
+Fund about 100 PAS and 10 pUSD rather than the runbook's 1,000 of each, and note the
+deployed address, which the workflow's run summary prints, as `FAUCET`.
 
 Then run the runbook's [verification](../README.md#verification) calls, plus:
 
@@ -184,53 +135,24 @@ Expect the configured owner and pauser, no pending owner, `paused=false`, the ex
 product ID, domain `paseo-faucet:v2`, the configured tier amounts, cap and epoch,
 enabled destinations 1000 and 1004, and balances that cover payouts plus delivery fees.
 
-## 5. Build and publish the frontend to Bulletin + DotNS
+## 5. Publish the frontend
 
-From the repository root in the same shell:
+Set `FAUCET_ADDRESS` on the `paseo` environment to `$FAUCET` and run **Deploy app** from
+`main`. It refuses an address that is not a `paseo-faucet:v2` contract for `PRODUCT_ID`,
+builds `frontend/` with both values, publishes `dist/` under `PRODUCT_ID`, archives every
+block the name then points at, and releases the archive as `app/<YYYY-MM-DD>.<n>`. Vite
+embeds both values at build time, so changing either needs a new deploy. Never put a
+private key or seed phrase in a `VITE_` variable.
 
-```sh
-cd frontend
-cp .env.example .env
-```
+Open `$PRODUCT_ID` in the compatible host's product navigator. Check it resolves the
+root named in the release, reports the expected product identity, loads the dynamic SDK
+files and requests the expected chain access. A gateway or a normal browser rendering
+the page does not prove that it is running in a host.
 
-Edit `.env` so `VITE_FAUCET_ADDRESS` is `$FAUCET` and `VITE_PRODUCT_ID` is the exact
-`$PRODUCT_ID` from above. Vite embeds these public values at build time: changing
-them requires rebuilding and publishing a new bundle. Never put a private key,
-seed phrase or keystore password in a `VITE_` variable.
-
-```sh
-npm run build
-npm run preview
-```
-
-Review the preview URL Vite prints, then stop it with Ctrl+C. The ordinary browser
-can render the page but cannot provide host signing or personhood proofs. Upload
-the **directory contents represented by `dist/`**, including all lazy-loaded SDK
-chunks, fonts and assets; do not upload the source tree, `.env`, or just `index.html`.
-
-```sh
-dotns bulletin upload ./dist --account publisher \
-  --bulletin-rpc wss://paseo-bulletin-rpc.polkadot.io
-export FRONTEND_CID=REPLACE_WITH_RETURNED_DIRECTORY_CID
-# Save the current CID first if this name already points to a release:
-dotns content view "$PRODUCT_LABEL"
-dotns content set "$PRODUCT_LABEL" "$FRONTEND_CID" --account publisher
-dotns content view "$PRODUCT_LABEL"
-dotns bulletin verify "$FRONTEND_CID"
-cd ..
-```
-
-Open `$PRODUCT_ID` using the compatible host's product navigator on public Paseo.
-Check it resolves the new CID, reports the expected product identity, loads the
-dynamic SDK files and requests the expected chain access. A gateway URL or a
-normal browser rendering the page does not prove that it is running in a host.
-If the host cannot resolve this legacy name or supply the public-Paseo chains,
-stop here and coordinate a supported environment; do not assume Next v2 is equivalent.
-
-Preserve the previous CID for rollback and record the publishing tool version,
-chain genesis, contract address, build commit and new CID. Confirm the network's
-Bulletin retention/renewal policy with its operator; a DotNS record alone does
-not keep uploaded content available indefinitely.
+Bulletin keeps stored data for 14 days. **Keep app alive** runs every day and stores the
+latest release's blocks again once the oldest is 13 days old (README,
+[Keeping the app stored](../README.md#keeping-the-app-stored)). After the first deploy,
+run it once with `force` to check the account's authorization end to end.
 
 ## 6. Test a real proof of personhood claim
 
@@ -327,9 +249,13 @@ claim hashes. If any of these steps fail, the canary has not passed.
 | Mapping or fee allocation fails | Host PGAS allowance and support for a fresh zero-PAS account; do not mark the zero-PAS test passed |
 | People dispatch succeeds but funds missing | Inspect destination XCM execution and balances before retrying |
 | Transaction outcome uncertain | Inspect finality/events/balances; never blindly resubmit |
+| Keep the storage authorization: not a Bulletin storage authorizer | `BULLETIN_AUTHORIZER` is no longer in Bulletin 1010's `TransactionStorage.AllowedAuthorizers`; set the key URI of one that is. Until then the app expires 14 days after its oldest block was stored |
+| Keep app alive: the name points elsewhere | The name's content changed outside **Deploy app**; deploy again so the archive holds what the name points at |
 
 To stop claims, the owner or pauser calls `pause()`. To restore an earlier frontend,
-set the name's content hash back to the recorded previous CID. An owner can disable
+revert it on `main` and run **Deploy app**, which publishes and archives it like any
+release; pointing the name at an older root by hand leaves the keep-alive refusing to
+run until the next deploy. An owner can disable
 a failing destination; contract migration and fund withdrawal are covered in the
 [operations runbook](../README.md#failure-modes-and-rollback).
 
@@ -337,9 +263,7 @@ a failing destination; contract migration and fund withdrawal are covered in the
 
 - [Repository contract deployment](../README.md#deployment) and
   [frontend integration details](../frontend/README.md).
-- [Current DotNS CLI reference](https://docs.polkadot.com/reference/apps/infrastructure/dotns/cli/)
-  and [Apps publishing guide](https://docs.polkadot.com/apps/deploy-your-app/),
-  which target newer environments than this implementation.
-- [Pinned legacy CLI package](https://www.npmjs.com/package/@parity/dotns-cli/v/0.6.1).
+- [polkadot-app-deploy 0.16.7](https://www.npmjs.com/package/@polkadot-community-foundation/polkadot-app-deploy/v/0.16.7),
+  the publishing tool.
 - [PoP in the Polkadot App](https://docs.polkadot.com/reference/apps/hosts/polkadot-app/pop/);
   host enrollment remains dependent on the available app/network build.

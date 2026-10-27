@@ -845,8 +845,8 @@ balances and a short epoch; Paseo production deployment.
 2. Configure tiers, cap and pauser; register the launch destinations, Asset Hub and People;
    hand ownership to the owner (D-08); retire the deployer key.
 3. Fund PAS and pUSD in tranches.
-4. Publish the product to its DotNS name (D-01) with the same CI pattern the current faucet uses
-   [F7].
+4. Publish the product to its DotNS name (D-01) on the PCF devnet with the Deploy app
+   workflow; Keep app alive stores it again before Bulletin's 14-day retention ends.
 5. Confirm A-1 on every supported host; run the end-to-end check from section 13. Run the
    sequence for production only after a canary claim to every enabled destination has arrived.
 6. Update the Paseo website faucet listing [W1] and the developer docs.
@@ -856,7 +856,8 @@ balances and a short epoch; Paseo production deployment.
 drips to a destination with no matching arrival there; Asset Hub's
 `XcmpQueue.DeliveryFeeFactor(id)` above 1 for any enabled destination, since a congested
 destination's payouts are skipped once delivery exceeds its `maxDeliveryFee`; `DripSkipped`
-events.
+events; a failed Keep app alive run, since the app expires 14 days after its oldest block was
+stored.
 Runbooks for top-up, pause, adding and removing a destination (flow 8.6, whose first gate is
 the relay's `Paras.ParaLifecycles`) and migration to a new contract are in the README;
 incident response is still to write.
