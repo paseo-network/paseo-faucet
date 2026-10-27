@@ -2,7 +2,8 @@ name: CI
 
 # Checks every pull request and every push to main: the contracts (format, build, lint, tests and
 # full coverage of src/), the frontend (ABI in sync with the contract, unit tests, build, browser
-# tests) and the fork check's types. The fork check itself runs in fork-check.yml.
+# tests), the deploy tooling (types, unit tests) and the fork check's types. The fork check itself
+# runs in fork-check.yml.
 on:
   pull_request:
   push:
@@ -87,6 +88,28 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
+
+  deploy:
+    name: Deploy tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: deploy
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deploy/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
 
   fork:
     name: Fork check types
