@@ -1,11 +1,13 @@
 import { bytesToHex, decodeEventLog, hexToBytes, type Abi, type Hex } from 'viem';
 import { createChainClient } from '@parity/product-sdk-chain-client';
 import { devnet_asset_hub } from '@parity/product-sdk-descriptors/devnet-asset-hub';
-import { createContractFromClient, createContractRuntimeFromClient, isContractAccountMapped, ensureContractAccountMapped, type AbiEntry } from '@parity/product-sdk-contracts';
+import { QUERY_FALLBACK_ORIGIN, createContractFromClient, createContractRuntimeFromClient, isContractAccountMapped, ensureContractAccountMapped, type AbiEntry, type ContractRuntime } from '@parity/product-sdk-contracts';
 import { SignerManager } from '@parity/product-sdk-signer';
-import { isInsideContainer, requestResourceAllocation, type RingLocation } from '@parity/product-sdk-host';
+import { formatHostError, getAccountsProvider, isInsideContainer, requestResourceAllocation, type RingLocation } from '@parity/product-sdk-host';
 import abi from './faucet.abi.json';
-import { ASSET_HUB_GENESIS, PEOPLE_GENESIS, SKIP_REASONS, bytesEqual, chainInfo, claimBlocker, encodeProof, planPayouts, type Destination, type FaucetService, type Payout, type Skipped, type Snapshot, type TierConfig } from './model';
+import { ASSET_HUB_GENESIS, PEOPLE_GENESIS, SKIP_REASONS, bytesEqual, chainInfo, claimBlocker, encodeProof, planPayouts, type Destination, type FaucetHost, type FaucetService, type Payout, type Skipped, type Snapshot, type TierConfig } from './model';
+
+const SIGN_IN = 'Sign in to this Polkadot host with your Polkadot app, then connect again.';
 
 function errorText(value: unknown): string {
   if (value instanceof Error) return value.message;
@@ -16,14 +18,16 @@ function tierFrom(value: unknown): TierConfig {
   const tier = value as { enabled: boolean; pas: bigint; pusd: bigint };
   return { enabled: tier.enabled, pas: BigInt(tier.pas), pusd: BigInt(tier.pusd) };
 }
-/** Whether the host refused because nobody is signed in to it. */
-function signedOut(error: unknown): boolean {
+/** The tags of a host error, outermost first, such as `Domain`, `V1`, `NotConnected`. */
+function hostTags(error: unknown): string[] {
+  const tags: string[] = [];
   let value = error instanceof Error ? error.cause : error;
-  while (value && typeof value === 'object') {
-    if ((value as { tag?: unknown }).tag === 'NotConnected') return true;
-    value = (value as { value?: unknown }).value;
+  while (value && typeof value === 'object' && tags.length < 8) {
+    const { tag, value: inner } = value as { tag?: unknown; value?: unknown };
+    if (typeof tag === 'string') tags.push(tag);
+    value = inner;
   }
-  return false;
+  return tags;
 }
 /** The faucet's `Dripped` and `DripSkipped` events among a transaction's events. */
 export function claimOutcome(events: unknown[], address: Hex): { paid: Payout[]; skipped: Skipped[] } {
@@ -40,7 +44,7 @@ export function claimOutcome(events: unknown[], address: Hex): { paid: Payout[];
   return { paid, skipped };
 }
 const defaultDependencies = {
-  createChainClient, SignerManager, isInsideContainer, createContractFromClient,
+  createChainClient, SignerManager, isInsideContainer, getAccountsProvider, createContractFromClient,
   createContractRuntimeFromClient, isContractAccountMapped, ensureContractAccountMapped, requestResourceAllocation,
 };
 export type FaucetDependencies = typeof defaultDependencies;
@@ -59,41 +63,33 @@ async function allocateFees(request = requestResourceAllocation) {
   if (allocation.value[0] !== 'Allocated') throw new Error('This host cannot provide PGAS for the claim. Try a supported Polkadot host.');
 }
 
-/** Connects only through the Polkadot host; never calls the legacy faucet backend. */
-export async function connectFaucet(address: Hex, productId: string, dependencies: FaucetDependencies = defaultDependencies): Promise<FaucetService> {
-  const { createChainClient, SignerManager, isInsideContainer, createContractFromClient,
-    createContractRuntimeFromClient, isContractAccountMapped, ensureContractAccountMapped, requestResourceAllocation } = dependencies;
-  if (!isInsideContainer()) throw new Error('Open this faucet inside a Polkadot host to connect your app and prove personhood.');
+function openClient(create: FaucetDependencies['createChainClient']) {
+  return create({ chains: { assetHub: devnet_asset_hub } });
+}
+/** What the faucet, open to anyone, shares with a signed-in account's claims. */
+interface Reader {
+  address: Hex;
+  productId: string;
+  client: Awaited<ReturnType<typeof openClient>>;
+  runtime: ContractRuntime;
+  query<T>(method: string, ...args: unknown[]): Promise<T>;
+  refresh(): Promise<Snapshot>;
+}
+
+/**
+ * Opens the faucet through the Polkadot host, or returns `null` outside one. Reading it needs nobody signed in;
+ * claiming needs the account `connect` returns. Never calls the legacy faucet backend.
+ */
+export async function openFaucet(address: Hex, productId: string, dependencies: FaucetDependencies = defaultDependencies): Promise<FaucetHost | null> {
+  const { createChainClient, isInsideContainer, getAccountsProvider, createContractFromClient, createContractRuntimeFromClient } = dependencies;
+  if (!(await isInsideContainer())) return null;
+  const accounts = await getAccountsProvider();
+  if (!accounts) return null;
   if (devnet_asset_hub.genesis !== ASSET_HUB_GENESIS) throw new Error('The SDK descriptor does not match Paseo Asset Hub.');
-  const client = await createChainClient({ chains: { assetHub: devnet_asset_hub } });
-  const signerManager = new SignerManager({ dappName: productId, ss58Prefix: 0 });
+  const client = await openClient(createChainClient);
+  const subscriptions = new Set<{ unsubscribe(): void }>();
   try {
-    const connected = await signerManager.connect();
-    if (!connected.ok) throw connected.error;
-    const account = await signerManager.getProductAccount(productId, 0);
-    if (!account.ok) {
-      throw signedOut(account.error) ? new Error('Sign in to this Polkadot host with your Polkadot app, then connect again.') : account.error;
-    }
-    const productAccount = account.value;
-    const signer = productAccount.getSigner();
-    async function ensureFees() {
-      // Public Paseo PGAS uses 10 decimal places. Keep a conservative 1-PGAS
-      // fee/deposit buffer, rather than consuming a host allocation per click.
-      const gas = await client.assetHub.query.Assets.Account.getValue(2000000000, productAccount.address, { at: 'best' });
-      if ((gas?.balance ?? 0n) < 10_000_000_000n) await allocateFees(requestResourceAllocation);
-    }
-    const runtime = createContractRuntimeFromClient(client.raw.assetHub, devnet_asset_hub);
-    const mapped = await isContractAccountMapped(runtime, productAccount.address);
-    if (!mapped.ok) throw mapped.error;
-    if (!mapped.value) {
-      // Bootstrap fees before asking a new, zero-PAS account to sign its mapping.
-      await ensureFees();
-      const setup = await ensureContractAccountMapped(runtime, productAccount.address, signer);
-      if (!setup.ok) throw setup.error;
-    }
-    const faucet = createContractFromClient(client.raw.assetHub, devnet_asset_hub, address, abi as AbiEntry[], {
-      defaultOrigin: productAccount.address, defaultSigner: signer,
-    });
+    const faucet = createContractFromClient(client.raw.assetHub, devnet_asset_hub, address, abi as AbiEntry[], { defaultOrigin: QUERY_FALLBACK_ORIGIN });
     async function query<T>(method: string, ...args: unknown[]): Promise<T> {
       const result = await faucet[method].query(...args);
       if (!result.success) throw new Error(`${method}: ${errorText(result.value)}`);
@@ -103,12 +99,9 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
     if (await query<string>('DOMAIN') !== bytesToHex(new TextEncoder().encode('paseo-faucet:v2'))) {
       throw new Error('This frontend requires the paseo-faucet:v2 contract. Update the ABI and integration for another version.');
     }
-    const listed = await signerManager.listRingVrfKeys('peopl.dot');
-    const heldTiers = listed.ok ? [2, 1].filter((tier) => listed.value.some((key) => ringOf(key, tier))) : [];
-    let claiming = false;
-    const service: FaucetService = {
-      address: productAccount.address,
-      heldTiers,
+    const reader: Reader = {
+      address, productId, client, query,
+      runtime: createContractRuntimeFromClient(client.raw.assetHub, devnet_asset_hub),
       async refresh(): Promise<Snapshot> {
         const epoch = await query<bigint>('currentEpoch');
         const [next, paused, cap, used, balances, destinations, lite, full] = await Promise.all([
@@ -120,18 +113,95 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
           pasBalance: BigInt(balances.pas), pusdBalance: BigInt(balances.pusd), destinations,
           lite: tierFrom(lite), full: tierFrom(full) };
       },
+    };
+    return {
+      refresh: reader.refresh,
+      connect: () => connectAccount(reader, dependencies),
+      async signIn() {
+        const outcome = await accounts.requestLogin('Sign in to claim Paseo test tokens.').match(
+          (response) => ({ response }),
+          (error) => ({ error }),
+        );
+        if ('response' in outcome) return outcome.response !== 'Rejected';
+        // A host that predates the call leaves signing in to its own controls.
+        if (hostTags(outcome.error).includes('Unsupported')) throw new Error(SIGN_IN);
+        throw new Error(`Sign-in failed: ${formatHostError(outcome.error)}`);
+      },
+      onSignInChange(callback) {
+        const subscription = accounts.subscribeAccountConnectionStatus((status) => callback(status === 'Connected'));
+        subscriptions.add(subscription);
+        return () => { subscriptions.delete(subscription); subscription.unsubscribe(); };
+      },
+      destroy() {
+        for (const subscription of subscriptions) subscription.unsubscribe();
+        subscriptions.clear();
+        client.destroy();
+      },
+    };
+  } catch (error) { client.destroy(); throw error; }
+}
+
+/**
+ * The signed-in person's product account, or `null` when nobody is signed in to the host. Fees and account setup wait
+ * for the first claim.
+ */
+async function connectAccount(reader: Reader, dependencies: FaucetDependencies): Promise<FaucetService | null> {
+  const { address, productId, client, runtime, query, refresh } = reader;
+  const { SignerManager, createContractFromClient, isContractAccountMapped, ensureContractAccountMapped, requestResourceAllocation } = dependencies;
+  const signerManager = new SignerManager({ dappName: productId, ss58Prefix: 0 });
+  try {
+    const connected = await signerManager.connect();
+    if (!connected.ok) throw connected.error;
+    const account = await signerManager.getProductAccount(productId, 0);
+    if (!account.ok) {
+      if (hostTags(account.error).includes('NotConnected')) { signerManager.destroy(); return null; }
+      throw account.error;
+    }
+    const productAccount = account.value;
+    const signer = productAccount.getSigner();
+    async function ensureFees() {
+      // Public Paseo PGAS uses 10 decimal places. Keep a conservative 1-PGAS
+      // fee/deposit buffer, rather than consuming a host allocation per click.
+      const gas = await client.assetHub.query.Assets.Account.getValue(2000000000, productAccount.address, { at: 'best' });
+      if ((gas?.balance ?? 0n) < 10_000_000_000n) await allocateFees(requestResourceAllocation);
+    }
+    let mapped = false;
+    async function prepareAccount(progress: (message: string) => void) {
+      // Bootstrap fees before asking a new, zero-PAS account to sign its mapping.
+      progress('Preparing transaction fees');
+      await ensureFees();
+      if (mapped) return;
+      const check = await isContractAccountMapped(runtime, productAccount.address);
+      if (!check.ok) throw check.error;
+      if (!check.value) {
+        progress('Confirm the one-time account setup in your Polkadot app');
+        const setup = await ensureContractAccountMapped(runtime, productAccount.address, signer);
+        if (!setup.ok) throw setup.error;
+        progress('Preparing transaction fees');
+        await ensureFees();
+      }
+      mapped = true;
+    }
+    const faucet = createContractFromClient(client.raw.assetHub, devnet_asset_hub, address, abi as AbiEntry[], {
+      defaultOrigin: productAccount.address, defaultSigner: signer,
+    });
+    const listed = await signerManager.listRingVrfKeys('peopl.dot');
+    const heldTiers = listed.ok ? [2, 1].filter((tier) => listed.value.some((key) => ringOf(key, tier))) : [];
+    let claiming = false;
+    const service: FaucetService = {
+      address: productAccount.address,
+      heldTiers,
       async claim(recipient, progress) {
         if (claiming) throw new Error('A claim is already in progress.');
         claiming = true;
         try {
           // Resource allocation must precede the first contract transaction for a zero-PAS signer.
-          progress('Preparing transaction fees');
-          await ensureFees();
+          await prepareAccount(progress);
           const keys = await signerManager.listRingVrfKeys('peopl.dot');
           if (!keys.ok) throw keys.error;
           // Retry proof preparation only. Never automatically resubmit an uncertain signed transaction.
           for (let attempt = 0; attempt < 2; attempt++) {
-            const state = await service.refresh();
+            const state = await refresh();
             if (state.epoch > 0xffffffffn) throw new Error('The faucet epoch exceeds the host’s proof index range.');
             const context = await query<Hex>('contextFor', state.epoch);
             const message = await query<Hex>('messageFor', state.epoch, recipient);
@@ -191,8 +261,8 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
           throw new Error('The period or proof changed while preparing the claim. Please try again.');
         } finally { claiming = false; }
       },
-      destroy() { signerManager.destroy(); client.destroy(); },
+      destroy() { signerManager.destroy(); },
     };
     return service;
-  } catch (error) { signerManager.destroy(); client.destroy(); throw error; }
+  } catch (error) { signerManager.destroy(); throw error; }
 }

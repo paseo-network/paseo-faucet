@@ -71,16 +71,24 @@ npm run abi
 ```
 
 The frontend speaks the `paseo-faucet:v2` contract, where one claim pays every enabled chain.
-Connection validates `productId()` and `DOMAIN`, and refuses a contract with another domain
-rather than use the wrong message format. The whitelist (REQ-19) is not built in the contract
-and has no UI.
+Opening the faucet validates `productId()` and `DOMAIN`, and refuses a contract with another
+domain rather than use the wrong message format. The whitelist (REQ-19) has no UI: the owner
+manages it on the contract.
+
+Inside a Polkadot host the page opens the faucet on load and reads its state without anyone
+signed in. Whoever is signed in to the host is connected without a click; fees and
+account setup wait for the first claim. While nobody is signed in the page stays read-only, and
+**Connect Polkadot app** asks the host for its sign-in (`requestLogin`), such as the code that
+pairs the Polkadot app, then connects. The page follows the host's connection status, so
+signing in or out through the host's own controls updates it too. Outside a host there is no
+button, only a note to open the faucet in one.
 
 The integration:
 
 1. Connects a host product-account signer, preserving the host's transaction extensions.
-2. Checks account mapping. For a new account, requests PGAS before asking the SDK to create
-   the mapping. A PGAS top-up is requested only below a conservative 1-PGAS fee/deposit buffer,
-   not on every click. Real zero-PAS setup still needs a host canary test.
+2. At the first claim, checks account mapping. For a new account, requests PGAS before asking
+   the SDK to create the mapping. A PGAS top-up is requested only below a conservative 1-PGAS
+   fee/deposit buffer, not on every click. Real zero-PAS setup still needs a host canary test.
 3. Reads contract state and obtains the exact `contextFor(epoch)` and
    `messageFor(epoch, recipient)` values, and shows what each enabled chain would receive,
    by the contract's rules (minimum, balance including `maxDeliveryFee`, pUSD where offered).
@@ -119,17 +127,19 @@ npm run test:ui
 ```
 
 For a separately installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its executable.
-The browser tests start and stop their own Vite server on port 4173. Tests cover chain display
-data, address handling, proof encoding, the payout plan and advisory eligibility, the
-signer/ABI handoff, the per-chain quota, event decoding, tier fallback, retries, context
-rejection, new-account setup, responsive layouts, the address deep link and absence of
-third-party requests on the disconnected page. The SDK-facing tests use
-explicit test doubles; they do not replace a real host or a cryptographic proof test.
+The browser tests start and stop their own Vite servers: port 4173 serves the undeployed page,
+and port 4174 a deployed one whose host integration the tests replace with a scripted host.
+Tests cover chain display data, address handling, proof encoding, the payout plan and advisory
+eligibility, the signer/ABI handoff, the per-chain quota, event decoding, tier fallback,
+retries, context rejection, new-account setup, sign-in and the connection
+states, responsive layouts, the address deep link and absence of third-party requests on the
+disconnected page. The SDK-facing tests use explicit test doubles; they do not replace a real
+host or a cryptographic proof test.
 
-The production SDK descriptor metadata is a large, separately loaded chunk. The initial page
-does not load the host integration until connection is requested. `npm audit` currently
-reports an upstream `deepmerge-ts <8` advisory through `polkadot-api`'s descriptor CLI dependency
-chain. It is not used by the browser claim code. No unverified major-version override was
+The production SDK descriptor metadata is a large, separately loaded chunk. The page loads the
+host integration after its first render, and an undeployed page never loads it. `npm audit`
+currently reports an upstream `deepmerge-ts <8` advisory through `polkadot-api`'s descriptor CLI
+dependency chain. It is not used by the browser claim code. No unverified major-version override was
 introduced; track the upstream tooling update before release.
 
 Real proof generation, host permissions, PGAS-only transactions and live destination arrivals

@@ -36,11 +36,21 @@ export type SkipReason = Exclude<(typeof SKIP_REASONS)[number], 'None'>;
 export interface Payout { id: number; pas: bigint; pusd: bigint; }
 export interface Skipped { id: number; reason: SkipReason; }
 export interface Receipt { txHash: string; recipient: Hex; paid: Payout[]; skipped: Skipped[]; }
+/** The faucet through a Polkadot host: anyone can read it, a signed-in person can claim. */
+export interface FaucetHost {
+  refresh(): Promise<Snapshot>;
+  /** The signed-in person's account, or `null` while nobody is signed in to the host. */
+  connect(): Promise<FaucetService | null>;
+  /** Asks the host to show its sign-in, such as the code that pairs the Polkadot app; false if the person cancels it. */
+  signIn(): Promise<boolean>;
+  /** Calls back whenever someone signs in to or out of the host; returns the unsubscribe. */
+  onSignInChange(callback: (signedIn: boolean) => void): () => void;
+  destroy(): void;
+}
 export interface FaucetService {
   address: string;
   /** The tiers the person holds a personhood key for, full (2) before lite (1); a claim drops one the host reports the key is not a member for. */
   heldTiers: number[];
-  refresh(): Promise<Snapshot>;
   claim(recipient: Hex, progress: (message: string) => void): Promise<Receipt>;
   destroy(): void;
 }
