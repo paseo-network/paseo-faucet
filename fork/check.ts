@@ -489,11 +489,12 @@ try {
       .map((e) => {
         const log = decodeEventLog({ abi, data: hex(e.value.data), topics: e.value.topics.map(hex) });
         const args = log.args as Record<string, any>;
-        return log.eventName === 'Dripped'
-          ? { event: 'Dripped', destination: args.destinationId, pas: args.pas, pusd: args.pusd }
-          : { event: log.eventName, destination: args.destinationId, reason: SKIP[args.reason] };
+        return log.eventName === 'DripSkipped'
+          ? { event: 'DripSkipped', destination: args.destinationId, reason: SKIP[args.reason] }
+          : { event: log.eventName, destination: args.destinationId, pas: args.pas, pusd: args.pusd };
       });
   const dripped = (id: number, amount: Amount) => ({ event: 'Dripped', destination: id, ...amount });
+  const diff = (a: Amount, b: Amount) => ({ pas: a.pas - b.pas, pusd: a.pusd - b.pusd });
   const paidOn = async (alias: Hex, id: number) =>
     read(ah, faucet, abi, 'hasClaimed', [await read(ah, faucet, abi, 'currentEpoch'), LITE, alias, id]);
   const dripsNow = async () =>
@@ -509,7 +510,6 @@ try {
     assert.equal(trappedAssets(await eventsSince(ah, ahFrom)).length, 0);
     const assetHubPaid = events.some((e) => e.event === 'Dripped' && e.destination === ah.paraId);
     const received = await holdings(to);
-    const diff = (a: Amount, b: Amount) => ({ pas: a.pas - b.pas, pusd: a.pusd - b.pusd });
     assert.deepEqual(diff(received, before.recipient), assetHubPaid ? DRIP : { pas: 0n, pusd: 0n });
     const sent = res.events.filter((e) => e.pallet === 'XcmpQueue' && e.name === 'XcmpMessageSent').length;
     assert.equal(sent, peoplePaid ? 1 : 0);
@@ -585,6 +585,67 @@ try {
     nothingPaid: { setup: 'Asset Hub disabled, People maxDeliveryFee 1 plank', revert: nothingPaid },
     paysTheSkippedDestinationLater: { recipient: to, alias, setup: 'People entry restored', ...paysSkipped },
     claimAgain: again.revert?.errorName,
+  };
+
+  // 5. REQ-19: a whitelisted account requests amounts without a proof, within its allowance per epoch.
+  const alice = await h160(ah, ALICE);
+  const ask: Amount = { pas: 100n * PAS, pusd: 10n * PUSD_UNIT };
+  const allowance = { pas: 2n * ask.pas + people.maxDeliveryFee, pusd: 2n * ask.pusd };
+  await call(ah, faucet, abi, 'setWhitelisted', [alice, allowance]);
+  /** Requests `amount` for a new recipient on destination `id` as Alice; checks what reached that chain. */
+  async function request(id: number, amount: Amount) {
+    const to = newAccount();
+    const before = { faucet: await holdings(account), drips: await dripsNow() };
+    const ahFrom = await head(ah);
+    const peopleFrom = await head(peopleChain);
+    const res = await call(ah, faucet, abi, 'request', [id, to, amount.pas, amount.pusd]);
+    assert.deepEqual(toJson(faucetEvents(res)), toJson([{ event: 'Requested', destination: id, ...amount }]));
+    assert.equal(trappedAssets(await eventsSince(ah, ahFrom)).length, 0);
+    let credited: Amount;
+    if (id === ah.paraId) {
+      credited = await holdings(to);
+      assert.deepEqual(credited, amount);
+    } else {
+      const peopleEvents = await untilEvent(peopleChain, peopleFrom, fromAssetHub);
+      const processed = peopleEvents.find(fromAssetHub);
+      assert.ok(processed?.name === 'Processed' && processed.value.success, 'People: not processed');
+      assert.equal(trappedAssets(peopleEvents).length, 0);
+      credited = { pas: await pas(peopleChain, to), pusd: await pusd(peopleChain, to) };
+      assert.equal(credited.pusd, amount.pusd);
+      assert.ok(credited.pas > amount.pas - remoteFee, 'People: credited less than the request less remoteFee');
+    }
+    assert.equal(await dripsNow(), before.drips);
+    return {
+      recipient: to,
+      credited,
+      faucetSpent: diff(before.faucet, await holdings(account)),
+      weight: res.weight,
+      storageDeposit: res.deposit,
+      txFee: event(res, 'TransactionPayment', 'TransactionFeePaid')?.actual_fee,
+    };
+  }
+  const requestedAssetHub = await request(ah.paraId, ask);
+  const requestedPeople = await request(people.id, ask);
+  const used = await read(ah, faucet, abi, 'requested', [await read(ah, faucet, abi, 'currentEpoch'), alice]);
+  assert.deepEqual(used, [2n * ask.pas + people.maxDeliveryFee, 2n * ask.pusd]);
+  const refused = async (amount: Amount) => {
+    const args = [ah.paraId, newAccount(), amount.pas, amount.pusd];
+    return (await simulate(ah, faucet, abi, 'request', args, { allowRevert: true })).revert?.errorName;
+  };
+  const overAllowance = await refused({ pas: assetHub.minPas, pusd: 0n });
+  assert.equal(overAllowance, 'AllowanceExceeded');
+  await call(ah, faucet, abi, 'setWhitelisted', [alice, { pas: 0n, pusd: 0n }]);
+  const afterRemoval = await refused(ask);
+  assert.equal(afterRemoval, 'NotWhitelisted');
+  report.req19 = {
+    account: alice,
+    allowance,
+    request: ask,
+    assetHub: requestedAssetHub,
+    people: requestedPeople,
+    requestedThisEpoch: { pas: used[0], pusd: used[1], note: 'the PAS includes People maxDeliveryFee' },
+    overAllowance,
+    afterRemoval,
   };
   report.programs = programs;
 } finally {
