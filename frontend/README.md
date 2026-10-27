@@ -92,8 +92,9 @@ The integration:
 3. Reads contract state and obtains the exact `contextFor(epoch)` and
    `messageFor(epoch, recipient)` values, and shows what each enabled chain would receive,
    by the contract's rules (minimum, balance including `maxDeliveryFee`, pUSD where offered).
-4. Selects People or People Lite keys by declared ring metadata, public Paseo People genesis
-   and collection. It does not assume foreign key indexes.
+4. Selects People or People Lite keys of the personhood product (`peopl.` and this product's
+   TLD) by declared ring metadata: public Paseo People genesis and collection, whether or not
+   the ring names the Members pallet. It does not assume foreign key indexes.
 5. Requests a proof, checks its context, SCALE-prefixes it, and checks the alias's quota with
    `hasClaimed(epoch, tier, alias, id)` for every enabled chain: an alias every enabled chain
    has paid this epoch is done, one with chains still due claims them. Full is preferred; a

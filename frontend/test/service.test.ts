@@ -19,15 +19,16 @@ function emitted(eventName: 'Dripped' | 'DripSkipped', destinationId: number, va
     : encodeAbiParameters([{ type: 'uint8' }, { type: 'bytes32' }, { type: 'uint8' }], [2, alias, Number(values[0])]);
   return { type: 'Revive', value: { type: 'ContractEmitted', value: { contract: from, data: hexToBytes(data), topics } } };
 }
-function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean; pgasResponse?: string } = {}) {
+function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; bareRings?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean; pgasResponse?: string } = {}) {
   const calls: string[] = [];
+  const owners: string[] = [];
   const statusListeners = new Set<(status: string) => void>();
   let proofs = 0, txs = 0, drys = 0;
   let transactionArgs: unknown[] = [];
   let messageArgs: unknown[] = [];
   let loginReason: string | undefined;
   const ring = (lite: boolean) => ({ chainId: PEOPLE_GENESIS, junctions: [
-    { tag: 'PalletInstance', value: 67 },
+    ...options.bareRings ? [] : [{ tag: 'PalletInstance', value: 67 }],
     { tag: 'CollectionId', value: bytesToHex(new TextEncoder().encode((lite ? 'pop:polkadot.network/people-lite' : 'pop:polkadot.network/people').padEnd(32, ' '))) },
   ] });
   class Manager {
@@ -36,7 +37,8 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
       if (options.productAccountError) return { ok: false, error: options.productAccountError };
       return { ok: true, value: { address: 'product-account', getSigner: () => 'product-signer' } };
     }
-    async listRingVrfKeys() {
+    async listRingVrfKeys(owner: string) {
+      owners.push(owner);
       if (options.listDenied) return { ok: false, error: new Error('NotAllowlisted') };
       const keys = [{ handle: 'full', rings: [ring(false)] }, { handle: 'lite', rings: [ring(true)] }];
       return { ok: true, value: keys.filter((key) => (options.heldKeys ?? ['full', 'lite']).includes(key.handle)) };
@@ -114,7 +116,7 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
     requestResourceAllocation: async () => { calls.push('pgas'); return options.stuckAllocation ? new Promise(() => {}) : { ok: true, value: [options.pgasResponse ?? 'Allocated'] }; },
   } as unknown as FaucetDependencies;
   return {
-    dependencies, calls, origins, statusListeners,
+    dependencies, calls, owners, origins, statusListeners,
     get counts() { return { proofs, txs, drys }; }, get transactionArgs() { return transactionArgs; }, get messageArgs() { return messageArgs; }, get loginReason() { return loginReason; },
   };
 }
@@ -198,11 +200,18 @@ test('the host reports signing in and out until the faucet closes', async () => 
   host.destroy();
   assert.equal(mock.statusListeners.size, 0);
 });
-test('connect reports the personhood tiers the person holds a key for', async () => {
-  const cases: [Parameters<typeof setup>[0], number[]][] = [[{}, [2, 1]], [{ heldKeys: ['lite'] }, [1]], [{ listDenied: true }, []]];
+test('connect reports the personhood tiers the person holds a key for, from the personhood product of its network', async () => {
+  const cases: [Parameters<typeof setup>[0], number[]][] = [[{}, [2, 1]], [{ heldKeys: ['lite'] }, [1]], [{ listDenied: true }, []], [{ bareRings: true }, [2, 1]]];
   for (const [options, expected] of cases) {
-    assert.deepEqual((await connect(setup(options))).heldTiers, expected);
+    const mock = setup(options);
+    assert.deepEqual((await connect(mock)).heldTiers, expected);
+    assert.deepEqual(mock.owners, ['peopl.dot']);
   }
+});
+test('a ring declared without the Members pallet still proves, as declared', async () => {
+  const mock = setup({ bareRings: true });
+  await (await connect(mock)).claim(recipient, () => {});
+  assert.equal(mock.counts.txs, 1);
 });
 test('connecting asks for no fees or mapping; a new account gets fees, then its mapping, at its first claim', async () => {
   const mock = setup({ mapped: false });
