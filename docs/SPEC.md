@@ -887,7 +887,6 @@ incident response is still to write.
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| D-03 | Epoch cap (`maxDripsPerEpoch`) | a cap sized to a daily budget; no cap, with funding in tranches and the pauser | a cap sized to the daily budget, since a paid lite person costs 75 PAS and earns more than that per claim (K-03) |
 | D-06 | pUSD source | issuer mint; issuer role to faucet ops; PSM; AMM swap | issuer mints to the contract in tranches |
 | D-07 | Legacy faucet and Matrix bot | keep with lower amounts; retire | keep for non-persons and Matrix until the product covers the main hosts |
 | D-10 | Paseo lite registration fee | keep 75 PAS; raise | raise well above any lite drip value |
@@ -897,7 +896,7 @@ Decided:
 | Topic | Decision |
 |---|---|
 | Product name (D-01) | `faucet.dot`, on the PCF devnet DotNS; it fixes the context |
-| Amounts and epoch (D-03) | per chain, full persons 5,000 PAS and 500 pUSD, lite persons 500 PAS and 100 pUSD; 24 h epochs. The epoch cap is still open |
+| Amounts, epoch and cap (D-03) | per chain, full persons 5,000 PAS and 500 pUSD, lite persons 500 PAS and 100 pUSD; 24 h epochs; at most 10,000 drips per epoch, which the owner raises, lowers or lifts (`setMaxDripsPerEpoch(4294967295)`) without a redeploy |
 | Owner and pauser (D-08) | one operator account, the sr25519 account the deploy workflows sign with, deploys the contract and is its owner and pauser; a multisig can take ownership later with `transferOwnership` |
 | Launch destinations | Asset Hub, People, Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502); the relay chain is not in the launch set |
 | Coretime and Bridge Hub | not part of the Paseo relay and out of scope |
@@ -929,7 +928,7 @@ Spikes (each a throwaway experiment whose result is written back into this spec)
 
 Go / no-go for launch:
 
-- [ ] D-03's epoch cap, D-06, D-07 and D-10 decided
+- [ ] D-06, D-07 and D-10 decided
 - [x] REQ-18 built and verified on the fork [E6]
 - [x] REQ-19 built and verified on the fork [E6]
 - [x] SP-02, and SP-04 for People, passed and folded into sections 7 and 9
