@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "fork": "chopsticks xcm -p chopsticks/asset-hub.yml -p chopsticks/people.yml",
+    "fork": "chopsticks xcm -p chopsticks/asset-hub.yml -p chopsticks/people.yml -p chopsticks/bulletin.yml -p chopsticks/asset-hub-next.yml -p chopsticks/bulletin-next.yml -p chopsticks/people-next.yml",
     "precheck": "forge build --root ../contracts",
     "check": "tsx check.ts",
     "typecheck": "tsc -p ."

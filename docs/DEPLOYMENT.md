@@ -2,8 +2,9 @@
 
 This runbook deploys the contract and the frontend as a Polkadot product on **public
 Paseo**. One claim pays every enabled destination. `contracts/script/Deploy.s.sol`
-registers Asset Hub (1000) and People (1004); other chains are added with
-`setDestination` once measured and tested ([Adding a destination](../README.md#adding-a-destination)).
+registers Asset Hub (1000), People (1004), Bulletin (1010), Asset Hub Next (1500), Bulletin
+Next (1501) and People Next (1502); other chains are added with `setDestination` once
+measured and tested ([Adding a destination](../README.md#adding-a-destination)).
 Whitelisted accounts (REQ-19) are added by the owner after the deploy, with `setWhitelisted`.
 
 Start with a canary, using small balances. A successful build or simulated claim is
@@ -122,11 +123,12 @@ export FULL_PUSD=200000          # 0.2 pUSD
 ```
 
 These are canary examples, not production budgets. The script enables both tiers and
-registers Asset Hub and People, so one claim pays both: it needs the tier's PAS twice,
-People's `maxDeliveryFee` (0.5 PAS) of delivery headroom, and the tier's pUSD twice. A
-chain the faucet cannot fund is skipped (`DripSkipped`), and pUSD it lacks is left out.
-Fund about 100 PAS and 10 pUSD rather than the runbook's 1,000 of each, and note the
-deployed address, which the workflow's run summary prints, as `FAUCET`.
+registers the six launch destinations, so one claim pays all of them: it needs the tier's
+PAS six times, 0.5 PAS of delivery headroom for each of the five remote chains (their
+`maxDeliveryFee`), and the tier's pUSD twice, for Asset Hub and People. A chain the faucet
+cannot fund is skipped (`DripSkipped`), and pUSD it lacks is left out. Fund about 100 PAS and
+10 pUSD rather than the runbook's 1,000 of each, and note the deployed address, which the
+workflow's run summary prints, as `FAUCET`.
 
 Then run the runbook's [verification](../README.md#verification) calls, plus:
 
@@ -136,7 +138,8 @@ cast call "$FAUCET" 'DOMAIN()(bytes15)' --rpc-url "$RPC"  # 0x706173656f2d666175
 
 Expect the configured owner and pauser, no pending owner, `paused=false`, the exact
 product ID, domain `paseo-faucet:v2`, the configured tier amounts, cap and epoch,
-enabled destinations 1000 and 1004, and balances that cover payouts plus delivery fees.
+enabled destinations 1000, 1004, 1010, 1500, 1501 and 1502, and balances that cover payouts
+plus delivery fees.
 
 ## 5. Publish the frontend
 

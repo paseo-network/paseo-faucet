@@ -397,7 +397,7 @@ try {
     },
   };
 
-  // 3. SP-04: teleports to People.
+  // 3. SP-04: transfers to every remote launch destination.
   const remote = [];
   const launchEntries: unknown[] = [{ chain: ah.name, ...assetHub, existentialDeposit: ahEd }];
   for (const d of launch.filter((e) => e.pasTransfer !== LOCAL)) {
@@ -405,12 +405,15 @@ try {
     assert.ok(dest, `no fork of destination ${d.id}`);
     const ed: bigint = constant(dest, 'Balances', 'ExistentialDeposit');
     assert.equal(d.minPas, ed + d.remoteFee);
-    assert.equal(d.minPusd, (await query(dest, 'Assets', 'Asset', PUSD_ON_PEOPLE)).min_balance);
-    const metadata = await query(dest, 'Assets', 'Metadata', PUSD_ON_PEOPLE);
-    assert.equal(new TextDecoder().decode(metadata.name), 'Digital Dollar');
+    if (d.pusdTransfer !== NONE) {
+      assert.equal(d.minPusd, (await query(dest, 'Assets', 'Asset', PUSD_ON_PEOPLE)).min_balance);
+      const metadata = await query(dest, 'Assets', 'Metadata', PUSD_ON_PEOPLE);
+      assert.equal(new TextDecoder().decode(metadata.name), 'Digital Dollar');
+    }
+    const drip: Amount = { pas: DRIP.pas, pusd: d.pusdTransfer === NONE ? 0n : DRIP.pusd };
     const cases = [];
     for (const [label, sent] of [
-      ['drip', DRIP],
+      ['drip', drip],
       ['minimum drip', { pas: d.minPas, pusd: d.minPusd }],
     ] as const) {
       const to = newAccount();
@@ -453,7 +456,7 @@ try {
     const dripDeliveryFee = cases[0]!.deliveryFee;
     const payWithBound = async (maxDeliveryFee: bigint) => {
       await call(ah, faucet, abi, 'setDestination', [{ ...d, maxDeliveryFee }]);
-      const args = [d.id, newAccount(), DRIP.pas, DRIP.pusd];
+      const args = [d.id, newAccount(), drip.pas, drip.pusd];
       return (await simulate(ah, faucet, abi, 'pay', args, { allowRevert: true })).revert?.errorName ?? 'ok';
     };
     const deliveryFeeBound = {
@@ -480,9 +483,12 @@ try {
   report.sp04 = remote;
   report.launchEntries = launchEntries;
 
-  // 4. REQ-18: one claim pays every enabled destination; a destination whose payout fails reverts alone.
+  // 4. REQ-18: one claim pays every enabled destination; a destination whose payout fails reverts alone. The
+  // cases below run on Asset Hub and People, then one claim pays every launch destination.
   const peopleChain = chains.people;
   const { remoteFee } = people;
+  const others = launch.filter((d) => d.id !== ah.paraId && d.id !== people.id);
+  for (const d of others) await call(ah, faucet, abi, 'disableDestination', [d.id]);
   const faucetEvents = (r: CallResult) =>
     r.events
       .filter((e) => e.pallet === 'Revive' && e.name === 'ContractEmitted' && hex(e.value.contract) === faucet)
@@ -572,6 +578,46 @@ try {
   assert.deepEqual([await paidOn(alias, ah.paraId), await paidOn(alias, people.id)], [true, true]);
   const again = await simulate(ah, faucet, abi, 'dripWithoutProof', [LITE, to, alias], { allowRevert: true });
   assert.equal(again.revert?.errorName, 'AlreadyClaimed');
+
+  // One claim pays every launch destination: PAS everywhere, pUSD on Asset Hub and People.
+  for (const d of others) await call(ah, faucet, abi, 'setDestination', [d]);
+  const everywhere = newAccount();
+  const before = { faucet: await holdings(account), drips: await dripsNow() };
+  const froms = new Map<number, number>();
+  for (const d of launch) {
+    const c = Object.values<Chain>(chains).find((chain) => chain.paraId === d.id)!;
+    froms.set(d.id, await head(c));
+  }
+  const res = await call(ah, faucet, abi, 'dripWithoutProof', [LITE, everywhere, newAccount()]);
+  const paidAmount = (d: Entry): Amount => ({ pas: DRIP.pas, pusd: d.pusdTransfer === NONE ? 0n : DRIP.pusd });
+  assert.deepEqual(toJson(faucetEvents(res)), toJson(launch.map((d) => dripped(d.id, paidAmount(d)))));
+  assert.equal(trappedAssets(await eventsSince(ah, froms.get(ah.paraId)!)).length, 0);
+  const sent = res.events.filter((e) => e.pallet === 'XcmpQueue' && e.name === 'XcmpMessageSent').length;
+  assert.equal(sent, launch.length - 1);
+  const arrivals = [];
+  for (const d of launch) {
+    const c = Object.values<Chain>(chains).find((chain) => chain.paraId === d.id)!;
+    const amount = paidAmount(d);
+    const credited = { pas: await pas(c, everywhere), pusd: await pusd(c, everywhere) };
+    if (d.pasTransfer === LOCAL) {
+      assert.deepEqual(credited, amount);
+    } else {
+      const events = await untilEvent(c, froms.get(d.id)!, fromAssetHub);
+      const processed = events.find(fromAssetHub);
+      assert.ok(processed?.name === 'Processed' && processed.value.success, `${c.name}: not processed`);
+      assert.equal(trappedAssets(events).length, 0);
+      credited.pas = await pas(c, everywhere);
+      credited.pusd = await pusd(c, everywhere);
+      assert.equal(credited.pusd, amount.pusd);
+      assert.ok(credited.pas > amount.pas - d.remoteFee, `${c.name}: credited less than the drip less remoteFee`);
+    }
+    arrivals.push({ destination: d.id, chain: c.name, credited });
+  }
+  const spentEverywhere = diff(before.faucet, await holdings(account));
+  const dripsTotal = launch.reduce((sum, d) => sum + paidAmount(d).pas, 0n);
+  const deliveryBound = others.reduce((sum, d) => sum + d.maxDeliveryFee, people.maxDeliveryFee);
+  assert.ok(spentEverywhere.pas - dripsTotal <= deliveryBound, 'delivery fees above their bounds');
+  assert.equal(await dripsNow(), before.drips + 1);
   report.req18 = {
     tier: LITE,
     drip: DRIP,
@@ -585,6 +631,15 @@ try {
     nothingPaid: { setup: 'Asset Hub disabled, People maxDeliveryFee 1 plank', revert: nothingPaid },
     paysTheSkippedDestinationLater: { recipient: to, alias, setup: 'People entry restored', ...paysSkipped },
     claimAgain: again.revert?.errorName,
+    paysEveryLaunchDestination: {
+      recipient: everywhere,
+      arrivals,
+      faucetSpent: spentEverywhere,
+      deliveryFees: spentEverywhere.pas - dripsTotal,
+      weight: res.weight,
+      storageDeposit: res.deposit,
+      txFee: event(res, 'TransactionPayment', 'TransactionFeePaid')?.actual_fee,
+    },
   };
 
   // 5. REQ-19: a whitelisted account requests amounts without a proof, within its allowance per epoch.

@@ -1,0 +1,8 @@
+endpoint:
+  - wss://paseo-people-next-system-rpc.polkadot.io
+# Set PEOPLE_NEXT_BLOCK to pin the fork; unset forks the latest block.
+block: ${env.PEOPLE_NEXT_BLOCK}
+port: 8005
+mock-signature-host: true
+# The runtime imports statement-store host functions that chopsticks does not provide.
+allow-unresolved-imports: true

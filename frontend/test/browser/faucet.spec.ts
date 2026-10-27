@@ -41,6 +41,7 @@ test('the FAQ tables show the faucet configuration without connecting', async ({
   await expect(page.locator('.faq-table table')).toHaveCount(2);
   await expect(page.locator('.faq-table').nth(0).locator('tbody td')).toHaveText(['5,000', '500', '500', '100', 'Once per 24 h', 'Once per 24 h']);
   await expect(page.locator('.faq-table').nth(1).locator('tbody th')).toHaveText(['Asset Hub', 'People', 'Bulletin', 'Asset Hub Next', 'People Next', 'Bulletin Next']);
+  await expect(page.locator('.faq-table').nth(1).locator('tbody td')).toHaveText(['✓', '✓', '✓', '✓', '✓', '—', '✓', '—', '✓', '—', '✓', '—']);
 });
 
 test('mobile layout is accessible and does not overflow', async ({ page }) => {
