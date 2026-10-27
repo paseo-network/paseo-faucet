@@ -850,9 +850,10 @@ balances and a short epoch; Paseo production deployment.
 
 **Launch sequence** (the runbook is in [README.md](../README.md#deployment)):
 
-1. Deploy from a hot deployer key; verify source on Blockscout.
-2. Configure tiers, cap and pauser; register the launch destinations, Asset Hub and People;
-   hand ownership to the owner (D-08); retire the deployer key.
+1. Deploy from the operator account with the Deploy contract workflow; verify source on
+   Blockscout.
+2. Configure tiers, cap and pauser and register the launch destinations, Asset Hub and People,
+   in the same run; the operator is owner and pauser (D-08).
 3. Fund PAS and pUSD in tranches.
 4. Publish the product to its DotNS name (D-01) on the PCF devnet with the Deploy app
    workflow; Keep app alive stores it again before Bulletin's 14-day retention ends.
@@ -886,10 +887,8 @@ incident response is still to write.
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| D-03 | Tiers, amounts, epoch length, cap | see section 11 | both tiers, lite small, 24 h epochs, cap near 1,000 |
 | D-06 | pUSD source | issuer mint; issuer role to faucet ops; PSM; AMM swap | issuer mints to the contract in tranches |
 | D-07 | Legacy faucet and Matrix bot | keep with lower amounts; retire | keep for non-persons and Matrix until the product covers the main hosts |
-| D-08 | Owner and pauser | multisig composition, pauser key holder | multisig of the Paseo team, with Parity optional; pauser held by the on-call operator |
 | D-10 | Paseo lite registration fee | keep 75 PAS; raise | raise well above any lite drip value |
 
 Decided:
@@ -897,6 +896,8 @@ Decided:
 | Topic | Decision |
 |---|---|
 | Product name (D-01) | `faucet.dot`, on the PCF devnet DotNS; it fixes the context |
+| Amounts, epoch and cap (D-03) | per chain, full persons 5,000 PAS and 500 pUSD, lite persons 500 PAS and 100 pUSD; 24 h epochs; at most 10,000 drips per epoch, which the owner raises, lowers or lifts (`setMaxDripsPerEpoch(4294967295)`) without a redeploy |
+| Owner and pauser (D-08) | one operator account, the sr25519 account the deploy workflows sign with, deploys the contract and is its owner and pauser; a multisig can take ownership later with `transferOwnership` |
 | Launch destinations | Asset Hub, People, Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502); the relay chain is not in the launch set |
 | Coretime and Bridge Hub | not part of the Paseo relay and out of scope |
 | Privileged origin and whitelist (D-15) | the owner is the admin: one origin for every privileged call, destinations and the whitelist included; whitelisted accounts need no personhood proof; each has an owner-set PAS cap and pUSD cap per epoch (REQ-19) |
@@ -927,7 +928,7 @@ Spikes (each a throwaway experiment whose result is written back into this spec)
 
 Go / no-go for launch:
 
-- [ ] D-03, D-06 to D-08 and D-10 decided
+- [ ] D-06, D-07 and D-10 decided
 - [x] REQ-18 built and verified on the fork [E6]
 - [x] REQ-19 built and verified on the fork [E6]
 - [x] SP-02, and SP-04 for People, passed and folded into sections 7 and 9
