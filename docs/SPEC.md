@@ -327,16 +327,17 @@ contract [S7] [R18]:
 |---|---|---|---|
 | Asset Hub (1000), local | local deposit | local deposit | launch set; 7.4 |
 | People (1004) | teleport | teleport only; People accepts pUSD solely as a teleport from Asset Hub [R21] [R18] | launch set; today's faucet teleports PAS here [F5] |
-| Bulletin (1010) | to determine | no | launch set; PAS only |
-| Asset Hub Next (1500) | to determine | yes; transfer kind to determine | launch set; transfer kinds, fees and minimums come from an arrival test (section 18) |
-| Bulletin Next (1501) | to determine | no | launch set; PAS only |
-| People Next System (1502) | to determine | yes; transfer kind to determine | launch set; transfer kinds, fees and minimums come from an arrival test (section 18) |
+| Bulletin (1010) | teleport | no: the chain has no assets pallet | launch set; PAS only |
+| Asset Hub Next (1500) | teleport | not yet: the chain has a pUSD of its own (local asset 50000413), and Asset Hub's pUSD is not registered there | launch set; PAS only until Asset Hub's pUSD is registered |
+| Bulletin Next (1501) | teleport | no: the chain has no assets pallet | launch set; PAS only |
+| People Next System (1502) | teleport | not yet: no pUSD is registered at Asset Hub's location | launch set; PAS only until Asset Hub's pUSD is registered |
 | Relay chain (OPT-03) | teleport | not possible | not in the launch set; can be registered later |
 | Non-system parachain (OPT-03) | reserve transfer, Asset Hub holds the reserve | reserve transfer, if the chain registered pUSD | the chain must accept Asset Hub as the PAS reserve and have an HRMP channel with Asset Hub; Asset Hub has channels with 16 non-system parachains [E4], but the channels predate the relay relaunch and only 3345, 3377 and 4009 of them are registered on the relay [E6] |
 
-**Where pUSD applies.** Asset Hub Next (1500) and People Next System (1502) also receive pUSD;
-how they hold it is determined with their arrival tests (section 18). On the live chains pUSD is
-meaningful in two places:
+**Where pUSD applies.** Only Asset Hub and People take pUSD today. Asset Hub Next (1500) and
+People Next System (1502) can once Asset Hub's pUSD is registered on them; the owner then
+updates their entries, with no contract change. On the live chains pUSD is meaningful in two
+places:
 
 - **Asset Hub**, where it lives (asset `50000413`): the PSM, the PAS/pUSD pool and contracts use
   it there [E1].
@@ -557,12 +558,15 @@ be registered. Launch entries, in plancks and pUSD base units:
 |---|---|---|---|---|---|---|---|
 | 1000 | Asset Hub (local) | `Local` | `Local` | 0 | 0 | 1e8 (the existential deposit) | 10 |
 | 1004 | People | `Teleport` | `Teleport` | 1e8 (0.01 PAS) | 5e9 (0.5 PAS) | 1.1e9 (existential deposit 1e9 + `remoteFee`) | 10,000 |
+| 1010 | Bulletin | `Teleport` | `None` | 1e9 (0.1 PAS) | 5e9 (0.5 PAS) | 2e9 (existential deposit 1e9 + `remoteFee`) | 0 |
+| 1500 | Asset Hub Next | `Teleport` | `None` | 1e8 (0.01 PAS) | 5e9 (0.5 PAS) | 2e8 (existential deposit 1e8 + `remoteFee`) | 0 |
+| 1501 | Bulletin Next | `Teleport` | `None` | 1e9 (0.1 PAS) | 5e9 (0.5 PAS) | 2e9 (existential deposit 1e9 + `remoteFee`) | 0 |
+| 1502 | People Next System | `Teleport` | `None` | 1e8 (0.01 PAS) | 5e9 (0.5 PAS) | 1.1e9 (existential deposit 1e9 + `remoteFee`) | 0 |
 
 The values are `launch()` in `contracts/script/Deploy.s.sol`, measured in [E6]
-(`launchEntries`): People's `remoteFee` is 31 times its measured execution fee and its
-`maxDeliveryFee` 16 times its measured delivery fee. Entries for Bulletin (1010), Asset Hub Next
-(1500), Bulletin Next (1501) and People Next System (1502) are added once measured (section
-18). The relay chain is not in the launch set.
+(`launchEntries`): every `remoteFee` is at least 13 times its destination's measured execution
+fee (People 31, Bulletin and Bulletin Next 13, Asset Hub Next 15, People Next 919) and every
+`maxDeliveryFee` 16 times the measured delivery fee. The relay chain is not in the launch set.
 
 ### 9.3 Epoch
 
@@ -664,16 +668,17 @@ skipped like any other `PayoutFailed`.
 | Part | Measured | Source |
 |---|---|---|
 | Proof verification | 20,089,078,000 ref time and 4,470 proof size, about 0.009 PAS | [R7], [E7] |
-| Claim paying Asset Hub and People, without the proof check | dry run 12,704,570,075 ref time and 637,506 proof size; fee 71,400,151 plancks (0.0071 PAS), paid in PAS | [E6] `req18` |
-| Later claim paying one skipped destination (People), without the proof check | 8,352,948,536 ref time and 475,301 proof size; fee 56,947,726 plancks | [E6] `req18` |
-| Rejected claim (`InvalidProof`) | 21,765,104,069 ref time and 273,709 proof size, paid by the signer | [E6] `dripWithEmptyProof` |
+| Claim paying all six launch destinations, without the proof check | dry run 29,442,634,503 ref time and 1,202,510 proof size; fee 121,269,378 plancks (0.0121 PAS), paid in PAS | [E6] `req18` |
+| Claim paying Asset Hub and People, six destinations registered, without the proof check | dry run 13,473,947,431 ref time and 761,034 proof size; fee 82,292,233 plancks (0.0082 PAS) | [E6] `req18` |
+| Later claim paying one skipped destination (People), without the proof check | 9,122,325,892 ref time and 598,829 proof size; fee 67,839,807 plancks | [E6] `req18` |
+| Rejected claim (`InvalidProof`) | 22,297,195,337 ref time and 356,061 proof size, paid by the signer | [E6] `dripWithEmptyProof` |
 | Whitelisted request (REQ-19), no proof | Asset Hub: 3,916,822,793 ref time and 134,898 proof size, fee 28,632,693 plancks; People: 6,049,041,447 ref time and 152,687 proof size, fee 30,101,238 plancks; 26,400,000 plancks of deposit on an account's first request in an epoch | [E6] `req19` |
 | Claim before REQ-18, one destination (Asset Hub), real proof | dry run 24,799,871,624 ref time and 238,759 proof size; 25,923,767,624 ref time when included; fee 84,240,636 plancks (0.0084 PAS) | [E7] |
 | Storage deposit | 26,400,000 plancks (0.00264 PAS) per claim record, one slot per epoch, tier and alias whatever the number of destinations (`DepositPerChildTrieItem` 2e7 plus 64 bytes at `DepositPerByte` 1e5), and the same once per epoch for `dripsInEpoch`: 52,800,000 on an epoch's first claim; a later claim of skipped destinations adds none | [E6] [E7] [R23] |
 | Payout XCM weight | 2,958,132,000 ref time on Asset Hub with pUSD; 5,005,332,000 to People | [E6] |
-| Delivery fee (other chains) | 306,150,000 plancks (0.0306 PAS) to People, paid by the contract, at most `maxDeliveryFee` | [E6] |
-| Destination execution fee | 3,168,127 plancks on People, taken from the dripped PAS | [E6] |
-| Total for the claimant | for Asset Hub and People, about 0.0071 PAS in fees plus the proof check's 0.009 PAS, and 0.00264 to 0.00528 PAS of deposit; payable in PGAS (5 PGAS per PGAS claim [E1]) if SP-03 passes | [E6] [E7] |
+| Delivery fee (other chains) | 306,150,000 plancks (0.0306 PAS) to People and 305,200,000 to each PAS-only chain, paid by the contract, at most `maxDeliveryFee` | [E6] |
+| Destination execution fee | 3,168,127 plancks on People, 71,860,000 on Bulletin and Bulletin Next, 6,408,558 on Asset Hub Next, 108,800 on People Next, taken from the dripped PAS | [E6] |
+| Total for the claimant | for all six launch destinations, about 0.0121 PAS in fees plus the proof check's 0.009 PAS, and 0.00264 to 0.00528 PAS of deposit; payable in PGAS (5 PGAS per PGAS claim [E1]) if SP-03 passes | [E6] [E7] |
 
 Proof size is what grows with the registry. Each contract storage read on Asset Hub is charged
 about 10 KB of proof size [R24] [S9], and a claim reads the `enabled` flag of every registered
@@ -826,7 +831,7 @@ proof-acquisition paths above; their fixes are in section 18.
 | Format vectors | context (9.4), message (9.5), proof prefix (9.6), XCM program bytes | contract views and product encoder match vectors computed independently (Python or papi) |
 | Unit | every rule in 9.7 and every error in 9.8, with the precompiles mocked at their addresses | full branch coverage of `drip` and admin paths |
 | Fork | Paseo AH fork with the real runtime precompiles; payout to mapped, unmapped, new and `0xEE` recipients; one claim paying Asset Hub and People, a payout skipped and paid by the next claim | REQ-05, REQ-06, REQ-18, K-09, K-22 |
-| Destinations | multi-chain chopsticks fork (`fork/`: Asset Hub with People; 1010, 1500, 1501 and 1502 to add) running each program; then one canary claim per destination on Paseo | funds and, for People, pUSD credited on the destination; `remoteFee` and `minPas` recorded (K-16) |
+| Destinations | multi-chain chopsticks fork (`fork/`: Asset Hub with People, Bulletin, Asset Hub Next, Bulletin Next and People Next) running each program; then one canary claim per destination on Paseo | funds and, for People, pUSD credited on the destination; `remoteFee` and `minPas` recorded (K-16) |
 | Registry | add, update, disable, re-enable, remove; pauser limited to disabling | REQ-16, REQ-17 |
 | Proof end to end | real Android host, real lite and full persons on Paseo, contract on Paseo with a small balance | REQ-02 to REQ-04, 8.3 retry, K-08 |
 | Cost | dry-run `ReviveApi.call` of a full claim | fits PGAS budget (REQ-07) |
@@ -910,7 +915,7 @@ Decided:
 | Payout atomicity (D-12) | pay what is available, on every enabled destination at once (REQ-18); a skipped destination stays claimable for the rest of the epoch |
 | Managing destinations | the owner adds and removes them with contract calls (REQ-16) |
 | Account format | `AccountId32` everywhere; H160 only on Asset Hub, the only chain with an EVM |
-| pUSD | dripped on Asset Hub, People, Asset Hub Next (1500) and People Next System (1502); Bulletin (1010) and Bulletin Next (1501) get PAS only (7.9) |
+| pUSD | dripped on Asset Hub and People; Asset Hub Next (1500) and People Next System (1502) once Asset Hub's pUSD is registered on them; Bulletin (1010) and Bulletin Next (1501) get PAS only (7.9) |
 | Logic placement | security-relevant logic in the contract, the rest in the front-end (6.1) |
 | Review depth (D-13) | internal review plus one external review before raising balances, rather than a full external audit |
 | License | Apache-2.0 |
@@ -924,7 +929,7 @@ Spikes (each a throwaway experiment whose result is written back into this spec)
 | SP-01 | Does a minimal product on Android get a proof for the faucet context and the 9.5 message, and does `personhoodInfoByProof` accept it on Paseo AH with the compact prefix? | a `true` result for a lite and a full person; the alias matches across two proofs | Contract half passed on a fork [E7]: the real precompile accepted tool-built lite and full proofs over the contract's own context and message; the alias was the same for two proofs in one epoch and changed in the next; another recipient, revision, ring, alias or tier, the unprefixed proof and last epoch's proof reverted `InvalidProof`. The host half is open. |
 | SP-02 | Can a contract run a local XCM deposit of PAS and pUSD to mapped, unmapped, new and `0xEE` accounts, and does a failing deposit revert the call? | all four cases pay; a forced failure reverts without trapped assets; cost measured | Passed [E6]: all four, and a drip of exactly the existential deposit, were credited exactly; the forced failure reverted `PayoutFailed` with nothing trapped and the faucet unchanged. |
 | SP-03 | Can a PGAS-only product account pay a full claim, including the nullifier deposit? | dry-run and one real claim succeed with 0 PAS on the signer | Untested. |
-| SP-04 | Do the 9.10 programs, executed from a contract, credit PAS on every remote launch destination, and pUSD where it is offered? What delivery fee, `remoteFee`, `maxDeliveryFee` and `minPas` does each destination need? | PAS arrives on each one; pUSD arrives on People in the "Digital Dollar" asset; values recorded for the launch entries | People passed [E6]: PAS and pUSD credited, nothing trapped, values in 9.2. Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) are not tested yet. |
+| SP-04 | Do the 9.10 programs, executed from a contract, credit PAS on every remote launch destination, and pUSD where it is offered? What delivery fee, `remoteFee`, `maxDeliveryFee` and `minPas` does each destination need? | PAS arrives on each one; pUSD arrives on People in the "Digital Dollar" asset; values recorded for the launch entries | People passed [E6]: PAS and pUSD credited, nothing trapped, values in 9.2. Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) passed on the forks, PAS only; one claim paid all six launch destinations. |
 
 Go / no-go for launch:
 
@@ -946,11 +951,10 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
 
 **Contract**
 
-1. **Destinations 1010, 1500, 1501 and 1502.** Check each is registered on the relay, determine
-   its PAS transfer kind and, for Asset Hub Next and People Next System, how they receive pUSD
-   (Bulletin and Bulletin Next get PAS only), measure `remoteFee`, `maxDeliveryFee`, `minPas`
-   and `minPusd` on a fork, add it to `launch()` in `contracts/script/Deploy.s.sol` and to the
-   fork check, then pass a live arrival test (8.6).
+1. **Destinations 1010, 1500, 1501 and 1502 on the live contract.** Their entries are measured
+   on the forks and in `launch()`. The owner adds them to the deployed contract with
+   `setDestination`, then a live arrival test per chain follows (8.6). pUSD on Asset Hub Next
+   and People Next System waits for Asset Hub's pUSD to be registered there.
 
 **Product**
 

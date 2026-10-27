@@ -14,9 +14,8 @@ faucet's visual design. It is local development work, not a deployed product; se
 [Integrating a front-end](#integrating-a-front-end) for the contract protocol.
 
 **Status:** the contract is implemented, unit tested and checked on forks of the live Paseo
-runtimes. It is not deployed. Next come four more destinations; two spikes are also still
-open. See
-[Status](#status) and [Remaining work](#remaining-work).
+runtimes. It is deployed on the PCF devnet. Two spikes are still open. See [Status](#status)
+and [Remaining work](#remaining-work).
 
 1. [How a claim works](#how-a-claim-works)
 2. [The contract](#the-contract)
@@ -304,15 +303,21 @@ The entries come from `launch()` in `contracts/script/Deploy.s.sol`.
 |---|---|---|---|---|---|---|
 | 1000 | Asset Hub | `Local` / `Local` | 0 | 0 | 100,000,000 (0.01 PAS, the existential deposit) | 10 |
 | 1004 | People | `Teleport` / `Teleport` | 100,000,000 (0.01 PAS) | 5,000,000,000 (0.5 PAS) | 1,100,000,000 (0.1 PAS existential deposit + `remoteFee`) | 10,000 |
+| 1010 | Bulletin | `Teleport` / `None` | 1,000,000,000 (0.1 PAS) | 5,000,000,000 (0.5 PAS) | 2,000,000,000 (0.1 PAS existential deposit + `remoteFee`) | 0 |
+| 1500 | Asset Hub Next | `Teleport` / `None` | 100,000,000 (0.01 PAS) | 5,000,000,000 (0.5 PAS) | 200,000,000 (0.01 PAS existential deposit + `remoteFee`) | 0 |
+| 1501 | Bulletin Next | `Teleport` / `None` | 1,000,000,000 (0.1 PAS) | 5,000,000,000 (0.5 PAS) | 2,000,000,000 (0.1 PAS existential deposit + `remoteFee`) | 0 |
+| 1502 | People Next | `Teleport` / `None` | 100,000,000 (0.01 PAS) | 5,000,000,000 (0.5 PAS) | 1,100,000,000 (0.1 PAS existential deposit + `remoteFee`) | 0 |
 
-On the fork, a drip to People cost 3,168,127 plancks of execution, so `remoteFee` has a
-31-fold margin, and 306,150,000 plancks (0.0306 PAS) of delivery, so `maxDeliveryFee` has a
-16-fold margin (`launchEntries` in [`docs/evidence/fork-check.json`](docs/evidence/fork-check.json)).
+Measured on the forks (`launchEntries` in [`docs/evidence/fork-check.json`](docs/evidence/fork-check.json)),
+a drip's execution fee was 3,168,127 plancks on People, 71,860,000 on Bulletin and Bulletin Next,
+6,408,558 on Asset Hub Next and 108,800 on People Next, so every `remoteFee` has at least a
+13-fold margin. Delivery cost 305,200,000 to 306,150,000 plancks (0.0306 PAS) to each, so
+`maxDeliveryFee` has a 16-fold margin.
 
-Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) join
-the launch set once their entries are measured on a fork and a live transfer has arrived (see
-[Remaining work](#remaining-work)). They are added with `setDestination`; no contract change is
-needed.
+The four newer chains take PAS only. Bulletin and Bulletin Next have no assets pallet. Asset Hub
+Next has a pUSD of its own (asset 50000413 there) rather than Asset Hub's, and People Next holds
+none. Either can take pUSD once Asset Hub's pUSD is registered on it, with a `setDestination`
+update and no contract change.
 
 ### Payout
 
@@ -459,12 +464,12 @@ the Asset Hub fork and asserts:
    proof reaches the real `IPersonhood` and reverts `InvalidProof` for both tiers.
 2. **Programs.** Every program the deployed contract hands to the XCM precompile, captured with
    `ReviveApi.trace_call`, decodes with Asset Hub's own codec into the intended structure and
-   re-encodes byte for byte (11 programs, including reserve, mixed and relay shapes).
+   re-encodes byte for byte (19 programs, including reserve, mixed and relay shapes).
 3. **Local payouts.** Mapped, unmapped, new and `0xEE` recipients, and a minimum drip, receive
    exactly the drip with nothing trapped. A forced failure (below the existential deposit to a
    new account) reverts `PayoutFailed` with no XCM effect and the faucet's balances unchanged.
-4. **Remote payouts.** Teleports to People (PAS, and pUSD into its "Digital Dollar" asset) are
-   processed with nothing trapped on either side. It measures
+4. **Remote payouts.** Teleports to every remote launch destination (PAS, and on People pUSD into
+   its "Digital Dollar" asset) are processed with nothing trapped on either side. It measures
    the delivery and execution fees, asserts `remoteFee` and `maxDeliveryFee` are at least 10
    times them, and shows the delivery bound passes at the measured fee and reverts
    `PayoutFailed` one planck below it.
@@ -475,7 +480,8 @@ the Asset Hub fork and asserts:
    People's payout reverts alone: Asset Hub is paid, the faucet spends exactly the Asset Hub
    drip, no message leaves for People, and nothing arrives there. With the entry restored, the
    same alias's next claim pays People only and does not count against the cap again; a third
-   reverts `AlreadyClaimed`, and a claim whose every payout fails reverts `PayoutFailed`.
+   reverts `AlreadyClaimed`, and a claim whose every payout fails reverts `PayoutFailed`. Then
+   one claim pays all six launch destinations, and the drip arrives on each.
 7. **Whitelisted requests** (REQ-19). A whitelisted account requests an amount on Asset Hub and
    on People without a proof: each arrives with nothing trapped, People's `maxDeliveryFee` counts
    against the allowance, and neither request counts as a drip. A further request beyond the
@@ -572,17 +578,17 @@ npx tsx keepalive.ts status --name <name> --car app.car
 ### Goal and scope
 
 Deploy `PaseoFaucet` to Paseo Asset Hub, configure tiers, cap, pauser and the launch
-destinations (Asset Hub and People), hand ownership to the owner if it is not the deployer,
-verify the source on Blockscout, fund it, and prove it with a canary claim. Run the whole
-runbook first as a canary deployment (small balances, a short epoch), and run it for production
-only after a canary claim to every enabled destination has arrived.
+destinations, hand ownership to the owner if it is not the deployer, verify the source on
+Blockscout, fund it, and prove it with a canary claim. Run the whole runbook first as a canary
+deployment (small balances, a short epoch), and run it for production only after a canary claim
+to every enabled destination has arrived.
 
 ### State affected
 
 - A new contract on Asset Hub, its code and storage, and its account: the contract's H160
   followed by twelve `0xEE` bytes. The deployer pays the fees and storage deposits.
 - Contract storage written by the script: `productId` and `owner` (constructor), `tiers(1)`,
-  `tiers(2)`, `maxDripsPerEpoch`, `pauser`, `destination(1000)`, `destination(1004)` and the
+  `tiers(2)`, `maxDripsPerEpoch`, `pauser`, `destination(id)` for each launch entry and the
   id list, and, when `OWNER` is not the deployer, `pendingOwner`; `owner` stays the deployer
   until `acceptOwnership`.
 - Balances: the deployer's PAS; the faucet's PAS (`System.Account`) and pUSD
@@ -642,7 +648,7 @@ export OWNER=0x...
    cast wallet import deployer --interactive
    ```
 2. Simulate. Nothing is sent; forge prints `SIMULATION COMPLETE` and the transactions: the
-   creation, `setTier` twice, `setMaxDripsPerEpoch`, `setPauser`, `setDestination` twice and,
+   creation, `setTier` twice, `setMaxDripsPerEpoch`, `setPauser`, `setDestination` six times and,
    when `OWNER` is not the deployer, `transferOwnership`.
    ```sh
    forge script script/Deploy.s.sol:Deploy --rpc-url $RPC --account deployer
@@ -704,7 +710,9 @@ cast call $FAUCET "maxDripsPerEpoch()(uint32)" --rpc-url $RPC       # MAX_DRIPS_
 cast call $FAUCET "tiers(uint8)(bool,uint128,uint128)" 1 --rpc-url $RPC   # true, LITE_PAS, LITE_PUSD
 cast call $FAUCET "tiers(uint8)(bool,uint128,uint128)" 2 --rpc-url $RPC   # true, FULL_PAS, FULL_PUSD
 cast call $FAUCET "destinations()((uint32,bool,uint8,uint8,uint128,uint128,uint128,uint128)[])" --rpc-url $RPC
-# [(1000, true, 1, 1, 0, 0, 100000000, 10), (1004, true, 2, 2, 100000000, 5000000000, 1100000000, 10000)]
+# [(1000, true, 1, 1, 0, 0, 100000000, 10), (1004, true, 2, 2, 100000000, 5000000000, 1100000000, 10000),
+#  (1010, true, 2, 0, 1000000000, 5000000000, 2000000000, 0), (1500, true, 2, 0, 100000000, 5000000000, 200000000, 0),
+#  (1501, true, 2, 0, 1000000000, 5000000000, 2000000000, 0), (1502, true, 2, 0, 100000000, 5000000000, 1100000000, 0)]
 cast call $FAUCET "contextFor(uint64)(bytes32)" 0 --rpc-url $RPC    # the vector for PRODUCT_ID
 cast call $FAUCET "balances()(uint256,uint256)" --rpc-url $RPC      # spendable plancks, pUSD base units
 ```
@@ -815,20 +823,21 @@ The product reads the contract and builds one `drip` call:
 | Contract, unit tests | Done; full line and branch coverage of `src/` | `forge test`, `forge coverage` |
 | Context, message and program formats | Match independent vectors and the real `ISystem` and XCM codec | `formats`, `programs` in `fork-check.json` |
 | SP-02: local payout | Passed: mapped, unmapped, new and `0xEE` recipients and a minimum drip credited exactly; the forced failure reverts with nothing trapped | `sp02` in `fork-check.json` |
-| SP-04: remote payout | People passed (PAS and pUSD credited, nothing trapped). Bulletin, Asset Hub Next, Bulletin Next and People Next System are not tested yet | `sp04`, `launchEntries`, `liveRelay` in `fork-check.json` |
-| REQ-18: one claim, every destination | Passed on the fork: Asset Hub and People paid by one claim; a payout over its delivery bound reverted alone and left nothing on the way to People; the skipped destination was paid by the next claim, which did not count against the cap | `req18` in `fork-check.json` |
+| SP-04: remote payout | Passed for every remote launch destination: People (PAS and pUSD), Bulletin, Asset Hub Next, Bulletin Next and People Next (PAS) credited with nothing trapped | `sp04`, `launchEntries`, `liveRelay` in `fork-check.json` |
+| REQ-18: one claim, every destination | Passed on the fork: Asset Hub and People paid by one claim, then all six launch destinations by one claim; a payout over its delivery bound reverted alone and left nothing on the way to People; the skipped destination was paid by the next claim, which did not count against the cap | `req18` in `fork-check.json` |
 | SP-01: contract half | Passed on a fork, against the previous one-destination contract and its 87-byte message: the real `IPersonhood` accepted lite and full proofs over the contract's own context and message; another recipient, revision, ring, alias or tier, a missing prefix, and last epoch's proof all reverted `InvalidProof`; a replay reverted `AlreadyClaimed` | `proof-spike.json` |
 | REQ-19: whitelisted requests | Passed on the fork: a whitelisted account requested 100 PAS and 10 pUSD on Asset Hub, credited exactly, and on People, credited less People's execution fee with nothing trapped; the allowance counted People's `maxDeliveryFee`, neither request counted as a drip, a further request reverted `AllowanceExceeded` and, once the account was removed, `NotWhitelisted`. A request costs about 0.003 PAS in fees | `req19` in `fork-check.json` |
-| Claim cost | A claim paying Asset Hub and People, without the proof check: dry run 12,704,570,075 ref time and 637,506 proof size, fee 71,400,151 plancks paid in PAS. The proof check adds about 20,089,078,000 ref time and 4,470 proof size. Storage deposit 52,800,000 plancks on an epoch's first claim, 26,400,000 on the first claim of an alias after that, and nothing for a later claim of skipped destinations. A rejected claim (`InvalidProof`) costs its signer 21,765,104,069 ref time and 273,709 proof size | `req18`, `dripWithEmptyProof` in `fork-check.json`; `proof-spike.json` |
+| Claim cost | A claim paying all six launch destinations, without the proof check: dry run 29,442,634,503 ref time and 1,202,510 proof size, fee 121,269,378 plancks paid in PAS; one paying Asset Hub and People, with six destinations registered: 13,473,947,431 ref time and 761,034 proof size, fee 82,292,233 plancks. The proof check adds about 20,089,078,000 ref time and 4,470 proof size. Storage deposit 52,800,000 plancks on an epoch's first claim, 26,400,000 on the first claim of an alias after that, and nothing for a later claim of skipped destinations. A rejected claim (`InvalidProof`) costs its signer 22,297,195,337 ref time and 356,061 proof size | `req18`, `dripWithEmptyProof` in `fork-check.json`; `proof-spike.json` |
 
 ## Remaining work
 
 The contract above is what this repository builds today. Still to do, in order (the full list,
 with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
 
-1. **Destinations 1010, 1500, 1501 and 1502.** Asset Hub Next and People Next System receive PAS
-   and pUSD, Bulletin and Bulletin Next PAS only: determine their transfer kinds, measure their
-   entries on a fork, add them to `launch()` and to the fork check, then pass a live arrival test.
+1. **Destinations 1010, 1500, 1501 and 1502 on the live contract.** Their entries are measured on
+   the forks and in `launch()`. The owner adds them to the deployed contract with `setDestination`,
+   and a live arrival test per chain follows. pUSD on Asset Hub Next and People Next waits for Asset
+   Hub's pUSD to be registered there.
 2. **The faucet product** ([SPEC section 10](docs/SPEC.md#10-product-specification)). A candidate
    frontend now lives in `frontend/`; deployment configuration and real-host end-to-end checks
    remain, followed by publication through DotNS/Bulletin.
