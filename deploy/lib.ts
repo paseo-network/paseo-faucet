@@ -142,3 +142,46 @@ export function plan(storedAt: (number | undefined)[], head: number, retention: 
     blocksLeft: oldestStoredAt + retention - head,
   };
 }
+
+interface ForgeTransaction {
+  transactionType: string;
+  function: string | null;
+  contractAddress: string | null;
+  transaction: { from: string; to: string | null; input: string; nonce: string; value?: string };
+}
+
+export interface DeployPlan {
+  /** The account forge simulated as, and the contract's address and creation nonce. */
+  sender: Address;
+  nonce: number;
+  contract: Address;
+  /** The creation code with the constructor arguments appended. */
+  initcode: Hex;
+  calls: { name: string; input: Hex }[];
+}
+
+/**
+ * The transactions of a `forge script` run, checked to create one contract and then only call it,
+ * all from one sender and without value.
+ */
+export function parsePlan(run: { transactions: ForgeTransaction[] }): DeployPlan {
+  const [create, ...calls] = run.transactions;
+  if (create?.transactionType !== 'CREATE' || !create.contractAddress) throw new Error('the plan does not start with a contract creation');
+  const contract = create.contractAddress as Address;
+  const sender = create.transaction.from as Address;
+  for (const t of run.transactions) {
+    const name = t.function ?? t.transactionType;
+    if (!isAddressEqual(t.transaction.from as Address, sender)) throw new Error(`${name} is sent by ${t.transaction.from}, not ${sender}`);
+    if (BigInt(t.transaction.value ?? '0x0') !== 0n) throw new Error(`${name} sends value`);
+    if (t !== create && (t.transactionType !== 'CALL' || !t.transaction.to || !isAddressEqual(t.transaction.to as Address, contract))) {
+      throw new Error(`${name} is not a call to ${contract}`);
+    }
+  }
+  return {
+    sender,
+    nonce: Number(create.transaction.nonce),
+    contract,
+    initcode: create.transaction.input as Hex,
+    calls: calls.map((t) => ({ name: t.function ?? 'call', input: t.transaction.input as Hex })),
+  };
+}

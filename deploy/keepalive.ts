@@ -1,6 +1,7 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { Bulletin, signerFromMnemonic, signerFromUri } from './bulletin.ts';
+import { Bulletin } from './bulletin.ts';
+import { operator, signerFromUri } from './keys.ts';
 import { authorizationUpkeep, decodeCar, encodeCar, gatewayFetcher, plan, resolveRoot, walk, type Block } from './lib.ts';
 import { DEVNET } from './network.ts';
 
@@ -35,12 +36,6 @@ function report(lines: string[]): void {
 }
 
 const totalBytes = (blocks: Block[]) => blocks.reduce((sum, block) => sum + block.bytes.length, 0);
-
-function mnemonicAccount() {
-  const mnemonic = process.env.MNEMONIC;
-  if (!mnemonic) throw new Error('MNEMONIC is not set');
-  return signerFromMnemonic(mnemonic);
-}
 
 /** A connection to the PCF devnet's Bulletin through `endpoints`, which may be a fork of it. */
 async function connect(endpoints: readonly string[]): Promise<Bulletin> {
@@ -111,7 +106,7 @@ async function check(
     report([`### ${name}`, '', '| | |', '|---|---|', `| Root | \`${root}\` |`, ...before.rows]);
     if (!restore || (!before.state.due && !force)) return;
 
-    const { signer, address } = mnemonicAccount();
+    const { signer, address } = operator();
     const authorization = await bulletin.authorization(address);
     if (!authorization || authorization.expiration <= before.head) {
       throw new Error(`${address} has no unexpired Bulletin storage authorization: run authorize first`);
@@ -141,7 +136,7 @@ async function authorize(account: string | undefined, endpoints: readonly string
   const uri = process.env.BULLETIN_AUTHORIZER;
   if (!uri) throw new Error('BULLETIN_AUTHORIZER is not set');
   const authorizer = signerFromUri(uri);
-  const who = account ?? mnemonicAccount().address;
+  const who = account ?? operator().address;
   const bulletin = await connect(endpoints);
   try {
     if (!(await bulletin.isAuthorizer(authorizer.address))) throw new Error(`${authorizer.address} is not a Bulletin storage authorizer`);
