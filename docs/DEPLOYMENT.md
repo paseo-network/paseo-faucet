@@ -4,7 +4,7 @@ This runbook deploys the contract and the frontend as a Polkadot product on **pu
 Paseo**. One claim pays every enabled destination. `contracts/script/Deploy.s.sol`
 registers Asset Hub (1000) and People (1004); other chains are added with
 `setDestination` once measured and tested ([Adding a destination](../README.md#adding-a-destination)).
-The whitelist (REQ-19) is not built yet.
+Whitelisted accounts (REQ-19) are added by the owner after the deploy, with `setWhitelisted`.
 
 Start with a canary, using small balances. A successful build or simulated claim is
 not evidence of a real host proof or remote token arrival.

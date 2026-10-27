@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {IPersonhood} from "../src/interfaces/IPersonhood.sol";
 import {IXcm} from "../src/interfaces/IXcm.sol";
-import {Destination, PaseoFaucet, Skip, Tier, TierConfig} from "../src/PaseoFaucet.sol";
+import {Allowance, Destination, PaseoFaucet, Skip, Tier, TierConfig} from "../src/PaseoFaucet.sol";
 import {Transfer, XcmProgram} from "../src/XcmProgram.sol";
 import {FaucetHarness} from "./harness/FaucetHarness.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
@@ -36,6 +36,7 @@ contract PaseoFaucetTest is Test {
     MockERC20 pusd;
     address pauser = makeAddr("pauser");
     address stranger = makeAddr("stranger");
+    address member = makeAddr("member");
 
     function setUp() public {
         vm.chainId(420_420_417);
@@ -639,6 +640,98 @@ contract PaseoFaucetTest is Test {
         _assertPaid(Tier.Lite, ALIAS, true, true, true);
     }
 
+    // Whitelist
+
+    function test_setWhitelisted_byOwnerOnly() public {
+        Allowance memory allowance = Allowance(1000e10, 100e6);
+        vm.prank(stranger);
+        vm.expectRevert(PaseoFaucet.NotOwner.selector);
+        faucet.setWhitelisted(member, allowance);
+        vm.prank(pauser);
+        vm.expectRevert(PaseoFaucet.NotOwner.selector);
+        faucet.setWhitelisted(member, allowance);
+
+        vm.expectEmit(address(faucet));
+        emit PaseoFaucet.WhitelistUpdated(member, allowance);
+        faucet.setWhitelisted(member, allowance);
+        (uint128 pas, uint128 pusd_) = faucet.whitelist(member);
+        assertEq(abi.encode(pas, pusd_), abi.encode(allowance.pas, allowance.pusd));
+
+        vm.expectRevert(PaseoFaucet.InvalidConfig.selector);
+        faucet.setWhitelisted(member, Allowance(0, 1));
+
+        vm.expectEmit(address(faucet));
+        emit PaseoFaucet.WhitelistUpdated(member, Allowance(0, 0));
+        faucet.setWhitelisted(member, Allowance(0, 0));
+        _expectRequestRevert(member, ASSET_HUB, LITE_PAS, 0, PaseoFaucet.NotWhitelisted.selector);
+    }
+
+    function test_request_paysWithoutAProofOrTheEpochCap() public {
+        faucet.setMaxDripsPerEpoch(0);
+        faucet.setWhitelisted(member, Allowance(1000e10, 100e6));
+        vm.expectEmit(address(faucet));
+        emit PaseoFaucet.Requested(START_EPOCH, member, ASSET_HUB, RECIPIENT, 300e10, 40e6);
+        vm.prank(member);
+        faucet.request(ASSET_HUB, RECIPIENT, 300e10, 40e6);
+        vm.prank(member);
+        faucet.request(ASSET_HUB, RECIPIENT, 300e10, 0);
+
+        _assertExecuted(_programs2(_assetHubProgram(300e10, 40e6), _assetHubProgram(300e10, 0)));
+        _assertRequested(START_EPOCH, member, 600e10, 40e6);
+        assertEq(faucet.dripsInEpoch(START_EPOCH), 0);
+    }
+
+    function test_request_countsTheDeliveryFeeOfARemoteDestination() public {
+        faucet.setWhitelisted(member, Allowance(LITE_PAS + MAX_DELIVERY_FEE, LITE_PUSD));
+        vm.prank(member);
+        faucet.request(PEOPLE, RECIPIENT, LITE_PAS, LITE_PUSD);
+        _assertExecuted(_programs1(_peopleProgram(LITE_PAS, LITE_PUSD)));
+        _assertRequested(START_EPOCH, member, LITE_PAS + MAX_DELIVERY_FEE, LITE_PUSD);
+
+        _expectRequestRevert(member, ASSET_HUB, _assetHub().minPas, 0, PaseoFaucet.AllowanceExceeded.selector);
+    }
+
+    function test_request_allowanceResetsEachEpoch() public {
+        faucet.setWhitelisted(member, Allowance(2 * LITE_PAS, LITE_PUSD));
+        vm.prank(member);
+        faucet.request(ASSET_HUB, RECIPIENT, LITE_PAS, LITE_PUSD);
+        _expectRequestRevert(member, ASSET_HUB, 1e8, 10, PaseoFaucet.AllowanceExceeded.selector);
+        _expectRequestRevert(member, ASSET_HUB, LITE_PAS + 1, 0, PaseoFaucet.AllowanceExceeded.selector);
+
+        vm.warp(block.timestamp + EPOCH_SECONDS);
+        vm.prank(member);
+        faucet.request(ASSET_HUB, RECIPIENT, 2 * LITE_PAS, LITE_PUSD);
+        _assertRequested(START_EPOCH, member, LITE_PAS, LITE_PUSD);
+        _assertRequested(START_EPOCH + 1, member, 2 * LITE_PAS, LITE_PUSD);
+    }
+
+    function test_request_checksRunInSpecOrder() public {
+        faucet.setWhitelisted(member, Allowance(LITE_PAS, LITE_PUSD));
+        faucet.pause();
+        _expectRequestRevert(stranger, ASSET_HUB, LITE_PAS, 0, PaseoFaucet.FaucetPaused.selector);
+        faucet.unpause();
+        _expectRequestRevert(stranger, ASSET_HUB, LITE_PAS, 0, PaseoFaucet.NotWhitelisted.selector);
+        _expectRequestRevert(member, 4242, LITE_PAS, 0, PaseoFaucet.UnknownDestination.selector);
+        faucet.disableDestination(PEOPLE);
+        _expectRequestRevert(member, PEOPLE, LITE_PAS, 0, PaseoFaucet.UnknownDestination.selector);
+        _expectRequestRevert(member, PAS_ONLY, _pasOnly().minPas - 1, 0, PaseoFaucet.InvalidRequest.selector);
+        _expectRequestRevert(member, PAS_ONLY, _pasOnly().minPas, LITE_PUSD, PaseoFaucet.InvalidRequest.selector);
+        _expectRequestRevert(member, ASSET_HUB, 1e8, _assetHub().minPusd - 1, PaseoFaucet.InvalidRequest.selector);
+        _expectRequestRevert(member, ASSET_HUB, LITE_PAS + 1, 0, PaseoFaucet.AllowanceExceeded.selector);
+        _assertRequested(START_EPOCH, member, 0, 0);
+    }
+
+    function test_request_failedPayoutRevertsAndSpendsNothing() public {
+        faucet.setWhitelisted(member, Allowance(LITE_PAS, LITE_PUSD));
+        xcm.setFails(_assetHubProgram(LITE_PAS, LITE_PUSD), true);
+        _expectRequestRevert(member, ASSET_HUB, LITE_PAS, LITE_PUSD, PaseoFaucet.PayoutFailed.selector);
+
+        xcm.setFails(_assetHubProgram(LITE_PAS, LITE_PUSD), false);
+        xcm.setOutflow(uint256(LITE_PAS) * 1e8 + 1);
+        _expectRequestRevert(member, ASSET_HUB, LITE_PAS, LITE_PUSD, PaseoFaucet.PayoutFailed.selector);
+        _assertRequested(START_EPOCH, member, 0, 0);
+    }
+
     // Helpers
 
     function _assetHub() internal pure returns (Destination memory) {
@@ -723,6 +816,17 @@ contract PaseoFaucetTest is Test {
         assertEq(faucet.hasClaimed(START_EPOCH, tier, contextAlias, ASSET_HUB), assetHub);
         assertEq(faucet.hasClaimed(START_EPOCH, tier, contextAlias, PEOPLE), people);
         assertEq(faucet.hasClaimed(START_EPOCH, tier, contextAlias, PAS_ONLY), pasOnly);
+    }
+
+    function _expectRequestRevert(address account, uint32 id, uint128 pas, uint128 pusd_, bytes4 selector) internal {
+        vm.prank(account);
+        vm.expectRevert(selector);
+        faucet.request(id, RECIPIENT, pas, pusd_);
+    }
+
+    function _assertRequested(uint64 epoch, address account, uint128 pas, uint128 pusd_) internal view {
+        (uint128 usedPas, uint128 usedPusd) = faucet.requested(epoch, account);
+        assertEq(abi.encode(usedPas, usedPusd), abi.encode(pas, pusd_));
     }
 
     function _assertExecuted(bytes[] memory programs) internal view {
