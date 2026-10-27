@@ -11,9 +11,19 @@ function errorText(value: unknown): string {
   if (value instanceof Error) return value.message;
   return JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
 }
+// product-sdk-contracts returns a function's several named outputs as an object keyed by name.
 function tierFrom(value: unknown): TierConfig {
-  const tuple = value as [boolean, bigint, bigint];
-  return { enabled: tuple[0], pas: BigInt(tuple[1]), pusd: BigInt(tuple[2]) };
+  const tier = value as { enabled: boolean; pas: bigint; pusd: bigint };
+  return { enabled: tier.enabled, pas: BigInt(tier.pas), pusd: BigInt(tier.pusd) };
+}
+/** Whether the host refused because nobody is signed in to it. */
+function signedOut(error: unknown): boolean {
+  let value = error instanceof Error ? error.cause : error;
+  while (value && typeof value === 'object') {
+    if ((value as { tag?: unknown }).tag === 'NotConnected') return true;
+    value = (value as { value?: unknown }).value;
+  }
+  return false;
 }
 /** The faucet's `Dripped` and `DripSkipped` events among a transaction's events. */
 export function claimOutcome(events: unknown[], address: Hex): { paid: Payout[]; skipped: Skipped[] } {
@@ -61,7 +71,9 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
     const connected = await signerManager.connect();
     if (!connected.ok) throw connected.error;
     const account = await signerManager.getProductAccount(productId, 0);
-    if (!account.ok) throw account.error;
+    if (!account.ok) {
+      throw signedOut(account.error) ? new Error('Sign in to this Polkadot host with your Polkadot app, then connect again.') : account.error;
+    }
     const productAccount = account.value;
     const signer = productAccount.getSigner();
     async function ensureFees() {
@@ -101,11 +113,11 @@ export async function connectFaucet(address: Hex, productId: string, dependencie
         const epoch = await query<bigint>('currentEpoch');
         const [next, paused, cap, used, balances, destinations, lite, full] = await Promise.all([
           query<bigint>('nextEpochStart'), query<boolean>('paused'), query<number>('maxDripsPerEpoch'),
-          query<number>('dripsInEpoch', epoch), query<[bigint, bigint]>('balances'),
+          query<number>('dripsInEpoch', epoch), query<{ pas: bigint; pusd: bigint }>('balances'),
           query<Destination[]>('destinations'), query<unknown>('tiers', 1), query<unknown>('tiers', 2),
         ]);
         return { epoch: BigInt(epoch), nextEpochStart: BigInt(next), paused, cap: Number(cap), used: Number(used),
-          pasBalance: BigInt(balances[0]), pusdBalance: BigInt(balances[1]), destinations,
+          pasBalance: BigInt(balances.pas), pusdBalance: BigInt(balances.pusd), destinations,
           lite: tierFrom(lite), full: tierFrom(full) };
       },
       async claim(recipient, progress) {

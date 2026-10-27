@@ -17,7 +17,7 @@ function emitted(eventName: 'Dripped' | 'DripSkipped', destinationId: number, va
     : encodeAbiParameters([{ type: 'uint8' }, { type: 'bytes32' }, { type: 'uint8' }], [2, alias, Number(values[0])]);
   return { type: 'Revive', value: { type: 'ContractEmitted', value: { contract: from, data: hexToBytes(data), topics } } };
 }
-function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; } = {}) {
+function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; } = {}) {
   const calls: string[] = [];
   let proofs = 0, txs = 0, drys = 0;
   let transactionArgs: unknown[] = [];
@@ -28,7 +28,10 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
   ] });
   class Manager {
     async connect() { return { ok: true, value: [] }; }
-    async getProductAccount() { return { ok: true, value: { address: 'product-account', getSigner: () => 'product-signer' } }; }
+    async getProductAccount() {
+      if (options.productAccountError) return { ok: false, error: options.productAccountError };
+      return { ok: true, value: { address: 'product-account', getSigner: () => 'product-signer' } };
+    }
     async listRingVrfKeys() {
       if (options.listDenied) return { ok: false, error: new Error('NotAllowlisted') };
       const keys = [{ handle: 'full', rings: [ring(false)] }, { handle: 'lite', rings: [ring(true)] }];
@@ -45,17 +48,18 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
     }
     destroy() { calls.push('destroy-signer'); }
   }
+  // Shaped as product-sdk-contracts returns them: a function's several named outputs become an object.
   const values: Record<string, unknown> = {
     productId: 'faucet.dot', DOMAIN: bytesToHex(new TextEncoder().encode('paseo-faucet:v2')),
     currentEpoch: 20000n, nextEpochStart: 1728086400n, paused: false,
     maxDripsPerEpoch: 1000, dripsInEpoch: 10,
-    balances: [100000000000000n, 100000000000000n],
+    balances: { pas: 100000000000000n, pusd: 90000000000000n },
     destinations: [
       { id: 1000, enabled: true, pasTransfer: 1, pusdTransfer: 1, remoteFee: 0n, maxDeliveryFee: 0n, minPas: 100000000n, minPusd: 10n },
       { id: 1004, enabled: true, pasTransfer: 2, pusdTransfer: 2, remoteFee: 100000000n, maxDeliveryFee: 5000000000n, minPas: 1100000000n, minPusd: 10000n },
       { id: 1501, enabled: false, pasTransfer: 2, pusdTransfer: 0, remoteFee: 100000000n, maxDeliveryFee: 5000000000n, minPas: 1100000000n, minPusd: 0n },
     ],
-    tiers: [true, 250000000000n, 25000000n],
+    tiers: { enabled: true, pas: 250000000000n, pusd: 25000000n },
     contextFor: context, messageFor: '0x1234',
   };
   const faucet = new Proxy({}, { get: (_, method: string) => ({
@@ -125,6 +129,18 @@ test('a person paid on some chains can claim the rest; paid on every enabled cha
     await assert.rejects(faucet.claim(recipient, () => {}));
     assert.equal(mock.counts.txs, 0);
   }
+});
+test('refresh reads the views that return several values', async () => {
+  const state = await (await connectFaucet(contract, 'faucet.dot', setup().dependencies)).refresh();
+  assert.deepEqual([state.pasBalance, state.pusdBalance], [100000000000000n, 90000000000000n]);
+  assert.deepEqual([state.lite, state.full], [{ enabled: true, pas: 250000000000n, pusd: 25000000n }, { enabled: true, pas: 250000000000n, pusd: 25000000n }]);
+});
+test('a host nobody is signed in to asks for a sign-in; other refusals pass through', async () => {
+  const hostError = (tag: string) => new Error(`Host rejected product account request: Domain → V1 → ${tag}`, { cause: { tag: 'Domain', value: { tag: 'V1', value: { tag } } } });
+  await assert.rejects(connectFaucet(contract, 'faucet.dot', setup({ productAccountError: hostError('NotConnected') }).dependencies),
+    /^Error: Sign in to this Polkadot host with your Polkadot app, then connect again\.$/);
+  await assert.rejects(connectFaucet(contract, 'faucet.dot', setup({ productAccountError: hostError('DomainNotValid') }).dependencies),
+    /Domain → V1 → DomainNotValid/);
 });
 test('connect reports the personhood tiers the person holds a key for', async () => {
   const cases: [Parameters<typeof setup>[0], number[]][] = [[{}, [2, 1]], [{ heldKeys: ['lite'] }, [1]], [{ listDenied: true }, []]];
