@@ -35,6 +35,13 @@ struct Destination {
     uint128 minPusd;
 }
 
+/// @notice What a whitelisted account may request per epoch: PAS in plancks, delivery fees included, and pUSD in base
+///         units.
+struct Allowance {
+    uint128 pas;
+    uint128 pusd;
+}
+
 /// @notice Why a claim left an enabled destination unpaid; `None` when it did not.
 enum Skip {
     None,
@@ -46,7 +53,8 @@ enum Skip {
 /// @title PaseoFaucet
 /// @notice Pays PAS and pUSD at most once per person, tier, epoch and destination to an `AccountId32`, on Asset Hub
 ///         and on every enabled destination chain at once. A person proves membership with a ring proof that
-///         `IPersonhood` verifies against a context and a message the contract derives itself.
+///         `IPersonhood` verifies against a context and a message the contract derives itself. Accounts the owner
+///         whitelists request amounts without a proof, within an allowance per epoch.
 contract PaseoFaucet {
     bytes15 public constant DOMAIN = "paseo-faucet:v2";
     bytes28 public constant INDEX_MAGIC = 0x12e86013736c5498f050b03cdc16957dff0e422fb92ca77ec3ab168f;
@@ -78,6 +86,8 @@ contract PaseoFaucet {
     uint32[] private _destinationIds;
     mapping(uint32 id => uint256) private _position;
     mapping(uint64 epoch => mapping(Tier tier => mapping(bytes32 contextAlias => uint256))) private _paid;
+    mapping(address account => Allowance) public whitelist;
+    mapping(uint64 epoch => mapping(address account => Allowance)) public requested;
 
     event Dripped(
         uint64 indexed epoch,
@@ -96,6 +106,14 @@ contract PaseoFaucet {
         bytes32 indexed recipient,
         Skip reason
     );
+    event Requested(
+        uint64 epoch,
+        address indexed account,
+        uint32 indexed destinationId,
+        bytes32 indexed recipient,
+        uint128 pas,
+        uint128 pusd
+    );
     event TierUpdated(Tier indexed tier, TierConfig config);
     event EpochCapUpdated(uint32 maxDripsPerEpoch);
     event DestinationSet(uint32 indexed id, Destination entry);
@@ -104,6 +122,7 @@ contract PaseoFaucet {
     event Paused(address account);
     event Unpaused(address account);
     event PauserUpdated(address newPauser);
+    event WhitelistUpdated(address indexed account, Allowance allowance);
     event Withdrawn(address indexed to, uint128 pas, uint256 pusd);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -120,6 +139,9 @@ contract PaseoFaucet {
     error NotPauser();
     error NotSelf();
     error InvalidConfig();
+    error NotWhitelisted();
+    error InvalidRequest();
+    error AllowanceExceeded();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -153,16 +175,40 @@ contract PaseoFaucet {
         uint32 revision
     ) external {
         (uint64 epoch, uint256 due) = _due(tier, contextAlias);
-        IPersonhood.ProofVerificationRequest memory request;
-        request.expectedStatus = uint8(tier);
-        request.proof = proof;
-        request.expectedAlias = contextAlias;
-        request.ringIndex = ringIndex;
-        request.context = contextFor(epoch);
-        request.revision = revision;
-        request.message = messageFor(epoch, recipient);
-        if (!PERSONHOOD.personhoodInfoByProof(request)) revert InvalidProof();
+        IPersonhood.ProofVerificationRequest memory verification;
+        verification.expectedStatus = uint8(tier);
+        verification.proof = proof;
+        verification.expectedAlias = contextAlias;
+        verification.ringIndex = ringIndex;
+        verification.context = contextFor(epoch);
+        verification.revision = revision;
+        verification.message = messageFor(epoch, recipient);
+        if (!PERSONHOOD.personhoodInfoByProof(verification)) revert InvalidProof();
         _drip(tier, epoch, contextAlias, recipient, due);
+    }
+
+    /// @notice Pays `pas` and `pusd` to `recipient` on destination `id` for a whitelisted caller, with no proof and
+    ///         outside the epoch cap. The PAS, the destination's `maxDeliveryFee` and the pUSD count against the
+    ///         caller's allowance for this epoch; a payout that fails reverts the request.
+    function request(uint32 id, bytes32 recipient, uint128 pas, uint128 pusd) external {
+        if (paused) revert FaucetPaused();
+        Allowance memory allowance = whitelist[msg.sender];
+        if (allowance.pas == 0) revert NotWhitelisted();
+        Destination memory d = destination[id];
+        if (!d.enabled) revert UnknownDestination();
+        if (pas < d.minPas || (pusd != 0 && (d.pusdTransfer == Transfer.None || pusd < d.minPusd))) {
+            revert InvalidRequest();
+        }
+        uint64 epoch = currentEpoch();
+        Allowance memory used = requested[epoch][msg.sender];
+        uint256 pasUsed = uint256(used.pas) + pas + d.maxDeliveryFee;
+        uint256 pusdUsed = uint256(used.pusd) + pusd;
+        if (pasUsed > allowance.pas || pusdUsed > allowance.pusd) revert AllowanceExceeded();
+        // casting to 'uint128' is safe because both totals are at most the allowance, which is uint128
+        // forge-lint: disable-next-line(unsafe-typecast)
+        requested[epoch][msg.sender] = Allowance(uint128(pasUsed), uint128(pusdUsed));
+        emit Requested(epoch, msg.sender, id, recipient, pas, pusd);
+        _pay(d, recipient, pas, pusd);
     }
 
     /// @notice Pays one destination's part of a drip. Only the faucet calls it, so that a failed payout reverts alone.
@@ -187,6 +233,14 @@ contract PaseoFaucet {
     function setPauser(address newPauser) external onlyOwner {
         pauser = newPauser;
         emit PauserUpdated(newPauser);
+    }
+
+    /// @notice Lets `account` request up to `allowance` per epoch without a proof; a zero allowance removes it. Every
+    ///         request carries PAS, so an allowance of pUSD alone is rejected.
+    function setWhitelisted(address account, Allowance calldata allowance) external onlyOwner {
+        if (allowance.pas == 0 && allowance.pusd != 0) revert InvalidConfig();
+        whitelist[account] = allowance;
+        emit WhitelistUpdated(account, allowance);
     }
 
     function pause() external onlyOwnerOrPauser {
