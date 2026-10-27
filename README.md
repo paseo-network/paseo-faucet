@@ -280,8 +280,8 @@ On the fork, a drip to People cost 3,168,127 plancks of execution, so `remoteFee
 31-fold margin, and 306,150,000 plancks (0.0306 PAS) of delivery, so `maxDeliveryFee` has a
 16-fold margin (`launchEntries` in [`docs/evidence/fork-check.json`](docs/evidence/fork-check.json)).
 
-Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) join the launch set
-once their entries are measured on a fork and a live transfer has arrived (see
+Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) join
+the launch set once their entries are measured on a fork and a live transfer has arrived (see
 [Remaining work](#remaining-work)). They are added with `setDestination`; no contract change is
 needed.
 
@@ -742,7 +742,7 @@ The product reads the contract and builds one `drip` call:
 | Contract, unit tests | Done; full line and branch coverage of `src/` | `forge test`, `forge coverage` |
 | Context, message and program formats | Match independent vectors and the real `ISystem` and XCM codec | `formats`, `programs` in `fork-check.json` |
 | SP-02: local payout | Passed: mapped, unmapped, new and `0xEE` recipients and a minimum drip credited exactly; the forced failure reverts with nothing trapped | `sp02` in `fork-check.json` |
-| SP-04: remote payout | People passed (PAS and pUSD credited, nothing trapped). Asset Hub Next, Bulletin Next and People Next System are not tested yet | `sp04`, `launchEntries`, `liveRelay` in `fork-check.json` |
+| SP-04: remote payout | People passed (PAS and pUSD credited, nothing trapped). Bulletin, Asset Hub Next, Bulletin Next and People Next System are not tested yet | `sp04`, `launchEntries`, `liveRelay` in `fork-check.json` |
 | REQ-18: one claim, every destination | Passed on the fork: Asset Hub and People paid by one claim; a payout over its delivery bound reverted alone and left nothing on the way to People; the skipped destination was paid by the next claim, which did not count against the cap | `req18` in `fork-check.json` |
 | SP-01: contract half | Passed on a fork, against the previous one-destination contract and its 87-byte message: the real `IPersonhood` accepted lite and full proofs over the contract's own context and message; another recipient, revision, ring, alias or tier, a missing prefix, and last epoch's proof all reverted `InvalidProof`; a replay reverted `AlreadyClaimed` | `proof-spike.json` |
 | Claim cost | A claim paying Asset Hub and People, without the proof check: dry run 12,698,159,195 ref time and 632,517 proof size, fee 70,960,246 plancks paid in PAS. The proof check adds about 20,089,078,000 ref time and 4,470 proof size. Storage deposit 52,800,000 plancks on an epoch's first claim, 26,400,000 on the first claim of an alias after that, and nothing for a later claim of skipped destinations. A rejected claim (`InvalidProof`) costs its signer 21,763,008,689 ref time and 272,046 proof size | `req18`, `dripWithEmptyProof` in `fork-check.json`; `proof-spike.json` |
@@ -755,9 +755,9 @@ with acceptance, is [SPEC section 18](docs/SPEC.md#18-remaining-work)):
 1. **Whitelist** ([REQ-19](docs/SPEC.md#4-requirements)). Accounts the owner whitelists request
    specific amounts without a personhood proof and without waiting for the next epoch, up to a
    PAS and a pUSD cap per epoch the owner sets for each (D-15).
-2. **Destinations 1500, 1501 and 1502.** Asset Hub Next and People Next System receive PAS and
-   pUSD, Bulletin Next PAS only: determine their transfer kinds, measure their entries on a
-   fork, add them to `launch()` and to the fork check, then pass a live arrival test.
+2. **Destinations 1010, 1500, 1501 and 1502.** Asset Hub Next and People Next System receive PAS
+   and pUSD, Bulletin and Bulletin Next PAS only: determine their transfer kinds, measure their
+   entries on a fork, add them to `launch()` and to the fork check, then pass a live arrival test.
 3. **The faucet product** ([SPEC section 10](docs/SPEC.md#10-product-specification)). A candidate
    frontend now lives in `frontend/`; deployment configuration and real-host end-to-end checks
    remain, followed by publication through DotNS/Bulletin.
@@ -786,17 +786,17 @@ explains each case and its fix.
 These are the operator's calls; [SPEC section 16](docs/SPEC.md#16-open-decisions) has the
 options and recommendations.
 
-- **Open:** D-01 product name, D-03 amounts, epoch length and cap, D-06 pUSD source, D-07 the
-  legacy faucet and Matrix bot, D-08 owner multisig and pauser, D-10 the Paseo lite
-  registration fee.
-- **Decided:** D-02 `personhoodInfoByProof`, D-04 per-epoch contexts, D-05 XCM payout, D-09
-  Solidity to EVM bytecode with Foundry, D-11 one claim per person per epoch in total, D-12 pay
-  what is available on every enabled destination (REQ-18), D-13 internal review plus
-  one external review before raising balances, D-15 the owner is the one privileged origin and
-  manages the whitelist (no proof, a cap per account per epoch), D-16 an 83-byte message
-  without a destination and a revert when a claim can pay nothing. The launch set is Asset Hub,
-  People, Asset Hub Next, Bulletin Next and People Next System; Coretime and Bridge Hub are not
-  part of the Paseo relay and are out of scope.
+- **Open:** D-03 amounts, epoch length and cap, D-06 pUSD source, D-07 the legacy faucet and
+  Matrix bot, D-08 owner multisig and pauser, D-10 the Paseo lite registration fee.
+- **Decided:** D-01 `faucet.dot` as the product name, D-02 `personhoodInfoByProof`, D-04
+  per-epoch contexts, D-05 XCM payout, D-09 Solidity to EVM bytecode with Foundry, D-11 one
+  claim per person per epoch in total, D-12 pay what is available on every enabled destination
+  (REQ-18), D-13 internal review plus one external review before raising balances, D-15 the
+  owner is the one privileged origin and manages the whitelist (no proof, a cap per account per
+  epoch), D-16 an 83-byte message without a destination and a revert when a claim can pay
+  nothing. The launch set is Asset Hub, People, Bulletin, Asset Hub Next, Bulletin Next and
+  People Next System; Coretime and Bridge Hub are not part of the Paseo relay and are out of
+  scope.
 
 ## Documents
 

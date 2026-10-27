@@ -40,9 +40,9 @@ Replace the custodial Paseo faucet backend with:
    dotUSD) and pays both, in one transaction, to a recipient of the caller's choice, at most
    once per person, epoch and chain. Personhood is checked on chain with the `IPersonhood`
    precompile's stateless ring-proof verification [P9] [P13]. One claim pays the recipient on
-   Asset Hub itself and on every other enabled chain reached by XCM: People, Asset Hub Next
-   (1500), Bulletin Next (1501) and People Next System (1502) (7.9, REQ-18). The owner adds or
-   removes destination chains with a contract call;
+   Asset Hub itself and on every other enabled chain reached by XCM: People, Bulletin (1010),
+   Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) (7.9, REQ-18).
+   The owner adds or removes destination chains with a contract call;
 2. a **faucet product**: a static web app on DotNS and Bulletin that runs inside the Polkadot
    hosts, obtains the person's ring proof from the host, and submits the claim from its product
    account, paying fees in PGAS [T1] [T4].
@@ -65,10 +65,10 @@ allowlist [H1] [T3]. A durable faucet needs the personhood product (`peopl.dot`)
   Polkadot Desktop and dot.li once they support it.
 - **G5. Auditable and boring.** Small surface, pinned dependencies, every rule visible on chain.
 - **G6. Works for users with nothing.** A person with zero PAS can claim.
-- **G7. Many target chains, managed on chain.** Asset Hub, People, Asset Hub Next (1500),
-  Bulletin Next (1501) and People Next System (1502) (7.9). The owner appends or removes
-  destinations as chains become available or stop accepting transfers; the product reads the
-  list from the contract, so no redeploy and no product release is needed.
+- **G7. Many target chains, managed on chain.** Asset Hub, People, Bulletin (1010), Asset Hub
+  Next (1500), Bulletin Next (1501) and People Next System (1502) (7.9). The owner appends or
+  removes destinations as chains become available or stop accepting transfers; the product
+  reads the list from the contract, so no redeploy and no product release is needed.
 - **G8. A shortcut for trusted users.** Accounts the owner whitelists can request a specific
   amount without a personhood proof and without waiting for the next epoch, up to a cap the
   owner sets for each of them (REQ-19).
@@ -124,7 +124,7 @@ The contract's security rests on: the `IPersonhood` precompile and the ring root
 | REQ-13 | Source is verified on the Paseo AH explorer, and the build is reproducible from a tagged commit. | G5. |
 | REQ-14 | The product works in at least one shipping host at launch (Android), detects unsupported hosts, and points their users to the fallback (D-07). | G4. Proofs are Android-only today [H1] to [H4]. |
 | REQ-15 | The product talks only to the host (chain access, signing, proofs). It makes no calls to any backend and embeds no secret. | G1. |
-| REQ-16 | The contract keeps a destination registry. The owner adds, updates and removes destinations with contract calls; the pauser can disable one. Only enabled destinations are paid. The launch set is Asset Hub (local), People (1004), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502). The built contract registers Asset Hub and People; the other three join after their entries are measured and they pass an arrival test (section 18). | G7. Acceptance: adding a destination makes it appear in the product with no product release; removing or disabling it stops payouts to it. |
+| REQ-16 | The contract keeps a destination registry. The owner adds, updates and removes destinations with contract calls; the pauser can disable one. Only enabled destinations are paid. The launch set is Asset Hub (local), People (1004), Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502). The built contract registers Asset Hub and People; the other four join after their entries are measured and they pass an arrival test (section 18). | G7. Acceptance: adding a destination makes it appear in the product with no product release; removing or disabling it stops payouts to it. |
 | REQ-17 | A destination entry holds typed fields only (section 9.2). The contract builds the XCM program for a destination from those fields; it never executes XCM bytes supplied by the owner or the caller. | Keeps every possible payout auditable: a destination entry can only move the drip amounts to the recipient on that chain. |
 | REQ-18 | One claim pays the recipient on every enabled destination at once: PAS everywhere, and pUSD where the destination takes it. A destination that cannot be paid (the tier's PAS is below its minimum, the faucet lacks the PAS, the payout fails on Asset Hub) is skipped, one whose pUSD cannot be paid gets PAS only, and the person receives the rest. A skipped destination can be claimed again in the same epoch. | D-12, D-16. The proven message names no destination (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; each skipped destination emits `DripSkipped` with the reason. Acceptance: `req18` in [E6]. |
 | REQ-19 | The owner keeps a whitelist of accounts. A whitelisted account requests specific PAS and pUSD amounts for a recipient on enabled destinations, without a personhood proof and without the per-person epoch limit; its total per epoch stays within a PAS cap and a pUSD cap the owner sets for it. Adding, changing and removing entries emits events. | G8. Not built yet (D-15). The cap bounds what a leaked whitelisted key can take before the owner removes it; requests stop while the faucet is paused. |
@@ -181,7 +181,7 @@ flowchart LR
   end
 
   subgraph More["Later destinations"]
-    RNX["Asset Hub Next (1500), Bulletin Next (1501),<br/>People Next System (1502), other parachains"]
+    RNX["Bulletin (1010), Asset Hub Next (1500),<br/>Bulletin Next (1501), People Next System (1502),<br/>other parachains"]
   end
 
   NOT -- "XCM: ring roots" --> SUB
@@ -328,6 +328,7 @@ contract [S7] [R18]:
 |---|---|---|---|
 | Asset Hub (1000), local | local deposit | local deposit | launch set; 7.4 |
 | People (1004) | teleport | teleport only; People accepts pUSD solely as a teleport from Asset Hub [R21] [R18] | launch set; today's faucet teleports PAS here [F5] |
+| Bulletin (1010) | to determine | no | launch set; PAS only |
 | Asset Hub Next (1500) | to determine | yes; transfer kind to determine | launch set; transfer kinds, fees and minimums come from an arrival test (section 18) |
 | Bulletin Next (1501) | to determine | no | launch set; PAS only |
 | People Next System (1502) | to determine | yes; transfer kind to determine | launch set; transfer kinds, fees and minimums come from an arrival test (section 18) |
@@ -533,7 +534,7 @@ This section fixes behaviour and formats, not code.
 
 | Name | Value |
 |---|---|
-| `PRODUCT_ID` | the DotNS name the product is served from, for example `faucet.dot` (D-01) |
+| `PRODUCT_ID` | the DotNS name the product is served from, `faucet.dot` (D-01) |
 | `EPOCH_SECONDS` | epoch length, for example 86,400 (D-03) |
 | `DOMAIN` | ASCII `paseo-faucet:v2` |
 | Precompile addresses | `IPersonhood` `0x000000000000000000000000000000000a010000`, `ISystem` `0x0000000000000000000000000000000000000900`, XCM `0x00000000000000000000000000000000000A0000`, pUSD ERC20 `0x02FaF21d00000000000000000000000001200000` |
@@ -556,9 +557,9 @@ be registered. Launch entries, in plancks and pUSD base units:
 
 The values are `launch()` in `contracts/script/Deploy.s.sol`, measured in [E6]
 (`launchEntries`): People's `remoteFee` is 31 times its measured execution fee and its
-`maxDeliveryFee` 16 times its measured delivery fee. Entries for Asset Hub Next (1500), Bulletin
-Next (1501) and People Next System (1502) are added once measured (section 18). The relay chain
-is not in the launch set.
+`maxDeliveryFee` 16 times its measured delivery fee. Entries for Bulletin (1010), Asset Hub Next
+(1500), Bulletin Next (1501) and People Next System (1502) are added once measured (section
+18). The relay chain is not in the launch set.
 
 ### 9.3 Epoch
 
@@ -817,7 +818,7 @@ proof-acquisition paths above; their fixes are in section 18.
 | Format vectors | context (9.4), message (9.5), proof prefix (9.6), XCM program bytes | contract views and product encoder match vectors computed independently (Python or papi) |
 | Unit | every rule in 9.7 and every error in 9.8, with the precompiles mocked at their addresses | full branch coverage of `drip` and admin paths |
 | Fork | Paseo AH fork with the real runtime precompiles; payout to mapped, unmapped, new and `0xEE` recipients; one claim paying Asset Hub and People, a payout skipped and paid by the next claim | REQ-05, REQ-06, REQ-18, K-09, K-22 |
-| Destinations | multi-chain chopsticks fork (`fork/`: Asset Hub with People; 1500, 1501 and 1502 to add) running each program; then one canary claim per destination on Paseo | funds and, for People, pUSD credited on the destination; `remoteFee` and `minPas` recorded (K-16) |
+| Destinations | multi-chain chopsticks fork (`fork/`: Asset Hub with People; 1010, 1500, 1501 and 1502 to add) running each program; then one canary claim per destination on Paseo | funds and, for People, pUSD credited on the destination; `remoteFee` and `minPas` recorded (K-16) |
 | Registry | add, update, disable, re-enable, remove; pauser limited to disabling | REQ-16, REQ-17 |
 | Proof end to end | real Android host, real lite and full persons on Paseo, contract on Paseo with a small balance | REQ-02 to REQ-04, 8.3 retry, K-08 |
 | Cost | dry-run `ReviveApi.call` of a full claim | fits PGAS budget (REQ-07) |
@@ -876,7 +877,6 @@ incident response is still to write.
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| D-01 | Product name (fixes the context) | reuse `faucet.dot` (6 characters, already registered by the current faucet's CI [F7]); a new name of 9 or more characters, open for registration [D2] | reuse `faucet.dot` if its owner agrees, so users keep one address |
 | D-03 | Tiers, amounts, epoch length, cap | see section 11 | both tiers, lite small, 24 h epochs, cap near 1,000 |
 | D-06 | pUSD source | issuer mint; issuer role to faucet ops; PSM; AMM swap | issuer mints to the contract in tranches |
 | D-07 | Legacy faucet and Matrix bot | keep with lower amounts; retire | keep for non-persons and Matrix until the product covers the main hosts |
@@ -887,7 +887,8 @@ Decided:
 
 | Topic | Decision |
 |---|---|
-| Launch destinations | Asset Hub, People, Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502); the relay chain is not in the launch set |
+| Product name (D-01) | `faucet.dot`, on the PCF devnet DotNS; it fixes the context |
+| Launch destinations | Asset Hub, People, Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502); the relay chain is not in the launch set |
 | Coretime and Bridge Hub | not part of the Paseo relay and out of scope |
 | Privileged origin and whitelist (D-15) | the owner is the admin: one origin for every privileged call, destinations and the whitelist included; whitelisted accounts need no personhood proof; each has an owner-set PAS cap and pUSD cap per epoch (REQ-19) |
 | Claim across destinations (D-16) | the proven message binds the `paseo-faucet:v2` domain, the contract, the chain id, the epoch and the recipient, 83 bytes (9.5); a claim that can pay nothing reverts, so the nullifier is not spent; each skipped destination emits `DripSkipped` (REQ-18) |
@@ -899,7 +900,7 @@ Decided:
 | Payout atomicity (D-12) | pay what is available, on every enabled destination at once (REQ-18); a skipped destination stays claimable for the rest of the epoch |
 | Managing destinations | the owner adds and removes them with contract calls (REQ-16) |
 | Account format | `AccountId32` everywhere; H160 only on Asset Hub, the only chain with an EVM |
-| pUSD | dripped on Asset Hub, People, Asset Hub Next (1500) and People Next System (1502); Bulletin Next (1501) gets PAS only (7.9) |
+| pUSD | dripped on Asset Hub, People, Asset Hub Next (1500) and People Next System (1502); Bulletin (1010) and Bulletin Next (1501) get PAS only (7.9) |
 | Logic placement | security-relevant logic in the contract, the rest in the front-end (6.1) |
 | Review depth (D-13) | internal review plus one external review before raising balances, rather than a full external audit |
 | License | Apache-2.0 |
@@ -913,11 +914,11 @@ Spikes (each a throwaway experiment whose result is written back into this spec)
 | SP-01 | Does a minimal product on Android get a proof for the faucet context and the 9.5 message, and does `personhoodInfoByProof` accept it on Paseo AH with the compact prefix? | a `true` result for a lite and a full person; the alias matches across two proofs | Contract half passed on a fork [E7]: the real precompile accepted tool-built lite and full proofs over the contract's own context and message; the alias was the same for two proofs in one epoch and changed in the next; another recipient, revision, ring, alias or tier, the unprefixed proof and last epoch's proof reverted `InvalidProof`. The host half is open. |
 | SP-02 | Can a contract run a local XCM deposit of PAS and pUSD to mapped, unmapped, new and `0xEE` accounts, and does a failing deposit revert the call? | all four cases pay; a forced failure reverts without trapped assets; cost measured | Passed [E6]: all four, and a drip of exactly the existential deposit, were credited exactly; the forced failure reverted `PayoutFailed` with nothing trapped and the faucet unchanged. |
 | SP-03 | Can a PGAS-only product account pay a full claim, including the nullifier deposit? | dry-run and one real claim succeed with 0 PAS on the signer | Untested. |
-| SP-04 | Do the 9.10 programs, executed from a contract, credit PAS on every remote launch destination, and pUSD where it is offered? What delivery fee, `remoteFee`, `maxDeliveryFee` and `minPas` does each destination need? | PAS arrives on each one; pUSD arrives on People in the "Digital Dollar" asset; values recorded for the launch entries | People passed [E6]: PAS and pUSD credited, nothing trapped, values in 9.2. Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) are not tested yet. |
+| SP-04 | Do the 9.10 programs, executed from a contract, credit PAS on every remote launch destination, and pUSD where it is offered? What delivery fee, `remoteFee`, `maxDeliveryFee` and `minPas` does each destination need? | PAS arrives on each one; pUSD arrives on People in the "Digital Dollar" asset; values recorded for the launch entries | People passed [E6]: PAS and pUSD credited, nothing trapped, values in 9.2. Bulletin (1010), Asset Hub Next (1500), Bulletin Next (1501) and People Next System (1502) are not tested yet. |
 
 Go / no-go for launch:
 
-- [ ] D-01, D-03, D-06 to D-08 and D-10 decided
+- [ ] D-03, D-06 to D-08 and D-10 decided
 - [x] REQ-18 built and verified on the fork [E6]
 - [ ] REQ-19 built and verified (section 18)
 - [x] SP-02, and SP-04 for People, passed and folded into sections 7 and 9
@@ -937,11 +938,11 @@ tests, the fork check [E6] and the proof spike [E7]. Still to do, in order:
 
 1. **Whitelist (REQ-19).** Add the owner-managed whitelist with a PAS cap and a pUSD cap per
    account per epoch, the request call, their events and tests.
-2. **Destinations 1500, 1501 and 1502.** Check each is registered on the relay, determine its
-   PAS transfer kind and, for Asset Hub Next and People Next System, how they receive pUSD
-   (Bulletin Next gets PAS only), measure `remoteFee`, `maxDeliveryFee`, `minPas` and `minPusd`
-   on a fork, add it to `launch()` in `contracts/script/Deploy.s.sol` and to the fork check,
-   then pass a live arrival test (8.6).
+2. **Destinations 1010, 1500, 1501 and 1502.** Check each is registered on the relay, determine
+   its PAS transfer kind and, for Asset Hub Next and People Next System, how they receive pUSD
+   (Bulletin and Bulletin Next get PAS only), measure `remoteFee`, `maxDeliveryFee`, `minPas`
+   and `minPusd` on a fork, add it to `launch()` in `contracts/script/Deploy.s.sol` and to the
+   fork check, then pass a live arrival test (8.6).
 
 **Product**
 
