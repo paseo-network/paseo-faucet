@@ -371,6 +371,7 @@ contracts/                      Foundry project; forge-std is a git submodule in
   test/                         unit tests with the precompiles mocked at their addresses, golden XCM vectors, a deploy test
   test/harness/FaucetHarness.sol  test-only subclass with owner-only pay() and dripWithoutProof(); for the fork check, never for real funds
 frontend/                       Paseo-only static UI, Product SDK integration, unit and browser tests
+deploy/                         keep-alive tool for the published app: archive, status, restore, authorize (keepalive.ts)
 fork/                           fork check: chopsticks forks of the Paseo chains, driven with papi and viem
   check.ts                      the checks; writes docs/evidence/fork-check.json
   lib.ts                        fork, transaction and contract helpers
@@ -475,27 +476,64 @@ not cover.
 
 ## Deployment
 
-For the complete contract + Bulletin/DotNS frontend deployment and real proof-of-personhood
-test sequence, use [Deploy and test the Paseo faucet](docs/DEPLOYMENT.md). It identifies the
-public-Paseo network used here and the matching legacy publishing tooling; current Paseo
-Next publishing defaults target a different network. The contract-only runbook follows; GitHub
-Actions can run it for you.
+GitHub Actions deploys the contract, publishes the app and keeps it stored, from `main`.
+[Deploy and test the Paseo faucet](docs/DEPLOYMENT.md) is the full sequence, from the
+publishing account to a real proof-of-personhood claim; the contract runbook below is what
+the contract workflow runs, and works by hand too.
 
 ### From GitHub Actions
 
-The **Deploy contract** workflow (`.github/workflows/deploy-contract.yml`, dispatched on `main`)
-runs this runbook's simulation and broadcast with the deployer key, verifies the source on
-Blockscout, and tags the commit `contract/<YYYY-MM-DD>.<n>` with the address. It reads the `paseo`
-environment:
-
-| Name | Kind | Value |
+| Workflow | Runs | Does |
 |---|---|---|
-| `DEPLOYER_PRIVATE_KEY` | secret | the deployer's Ethereum private key, funded with a few PAS. `Deploy.s.sol` reads it from the environment, so it appears in no command line or log. |
-| `PRODUCT_ID`, `EPOCH_SECONDS`, `MAX_DRIPS_PER_EPOCH`, `LITE_PAS`, `LITE_PUSD`, `FULL_PAS`, `FULL_PUSD`, `OWNER`, `PAUSER` | variables | as in [Calls](#calls) |
+| Deploy contract (`deploy-contract.yml`) | dispatched on `main` | simulates and broadcasts `Deploy.s.sol` on Paseo Asset Hub, verifies the source on Blockscout, and tags the commit `contract/<YYYY-MM-DD>.<n>` with the address |
+| Deploy app (`deploy-app.yml`) | dispatched on `main` | checks that `FAUCET_ADDRESS` is a `paseo-faucet:v2` contract for `PRODUCT_ID`, builds `frontend/`, publishes it under `PRODUCT_ID` on the PCF devnet with `polkadot-app-deploy`, and releases an archive of every block the name points at as `app/<YYYY-MM-DD>.<n>` |
+| Keep app alive (`keep-app-alive.yml`) | every day, and on demand with `force` | stores the latest `app/*` release's blocks again once the oldest is 13 days old or one is missing ([below](#keeping-the-app-stored)) |
 
-Restrict the environment to the `main` branch. The run proposes `OWNER`, who then accepts
-ownership as in step 5 of [Calls](#calls); from then on the deployer key controls nothing. The run
-summary lists the next steps, and the broadcast record is kept as an artifact.
+They read the `paseo` environment. Restrict it to the `main` branch, and give it no
+required reviewers: Keep app alive runs on a schedule, and a scheduled run would wait for
+an approval every day.
+
+| Name | Kind | Used by | Value |
+|---|---|---|---|
+| `DEPLOYER_PRIVATE_KEY` | secret | Deploy contract | the deployer's Ethereum private key, funded with a few PAS. `Deploy.s.sol` reads it from the environment, so it appears in no command line or log. |
+| `MNEMONIC` | secret | Deploy app, Keep app alive | the publishing account: its sr25519 root account owns `PRODUCT_ID` and stores the app on Bulletin 1010 ([DEPLOYMENT.md](docs/DEPLOYMENT.md#2-prepare-the-publishing-account-and-name)) |
+| `BULLETIN_AUTHORIZER` | secret | Deploy app, Keep app alive | the key URI of a Bulletin 1010 storage authorizer (`//Eve` on the PCF devnet), which grants or extends the publishing account's storage authorization |
+| `PRODUCT_ID` | variable | all three | the DotNS name the app is served from, which is also the contract's `productId` |
+| `EPOCH_SECONDS`, `MAX_DRIPS_PER_EPOCH`, `LITE_PAS`, `LITE_PUSD`, `FULL_PAS`, `FULL_PUSD`, `OWNER`, `PAUSER` | variables | Deploy contract | as in [Calls](#calls) |
+| `FAUCET_ADDRESS` | variable | Deploy app | the deployed contract, from the Deploy contract run's summary |
+
+The order is: Deploy contract; `OWNER` accepts ownership (step 5 of [Calls](#calls)), after
+which the deployer key controls nothing; set `FAUCET_ADDRESS`; fund the faucet (steps 6
+and 7); Deploy app; then Keep app alive once with `force`, to check the publishing
+account's storage authorization end to end. The workflows print no secret, and only the
+release and tag jobs, which hold none, can write to the repository.
+
+### Keeping the app stored
+
+Bulletin keeps each stored block for 14 days (`RetentionPeriod`, 201,600 blocks).
+`polkadot-app-deploy` skips every block Bulletin already holds, however close it is to
+expiring, so deploying unchanged content stores nothing, and a new release can re-use
+older blocks that expire before the rest. `deploy/keepalive.ts` therefore archives,
+after every deploy, exactly the blocks the name points at, each checked against its CID
+and against Bulletin. Keep app alive stores all of them again from that archive, with
+the account the deploy stored with, once the oldest is 13 days old or one is missing.
+
+It reads each block's last store from Bulletin's `TransactionByContentHash`, refuses to
+run when the name points elsewhere than the archive, requires an unexpired storage
+authorization, and checks afterwards that every block was stored again.
+
+Storage authorizations last 14 days as well (`AuthorizationPeriod`). Before storing, both
+workflows run `keepalive.ts authorize`, signed by `BULLETIN_AUTHORIZER`: it grants the
+publishing account an authorization when it has none or its grant has expired, and extends
+the grant once fewer than 3 days are left. Since Keep app alive runs every day, the
+account's authorization never lapses. To look by hand:
+
+```sh
+cd deploy
+npm ci
+gh release download app/<YYYY-MM-DD>.<n> --pattern app.car
+npx tsx keepalive.ts status --name <name> --car app.car
+```
 
 ### Goal and scope
 

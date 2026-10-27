@@ -1,0 +1,27 @@
+{
+  "name": "paseo-faucet-deploy",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "keepalive": "tsx keepalive.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@ipld/car": "5.4.7",
+    "@ipld/dag-pb": "4.2.0",
+    "@polkadot-labs/hdkd": "0.0.32",
+    "@polkadot-labs/hdkd-helpers": "0.0.34",
+    "multiformats": "14.0.5",
+    "polkadot-api": "3.2.1",
+    "viem": "2.56.9"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}
