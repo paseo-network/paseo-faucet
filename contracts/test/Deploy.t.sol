@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {Destination, PaseoFaucet, Tier} from "../src/PaseoFaucet.sol";
 import {Deploy} from "../script/Deploy.s.sol";
+import {Transfer} from "../src/XcmProgram.sol";
 
 contract DeployTest is Test {
     function test_run_configuresTheLaunchState() public {
@@ -30,14 +31,17 @@ contract DeployTest is Test {
         assertTrue(enabled);
         assertEq(pas, 5e12);
         assertEq(pusd, 5e8);
-        Destination[2] memory launch = deploy.launch();
+        Destination[6] memory launch = deploy.launch();
         Destination[] memory registered = faucet.destinations();
         assertEq(registered.length, launch.length);
+        uint32[6] memory ids = [uint32(1000), 1004, 1010, 1500, 1501, 1502];
         for (uint256 i; i < launch.length; ++i) {
             assertEq(abi.encode(registered[i]), abi.encode(launch[i]));
+            assertEq(launch[i].id, ids[i]);
+            assertTrue(launch[i].enabled);
+            // Only Asset Hub and People take pUSD.
+            assertEq(launch[i].pusdTransfer == Transfer.None, i > 1);
         }
-        assertEq(abi.encode(launch[0].id, launch[1].id), abi.encode(1000, 1004));
-        assertTrue(launch[0].enabled && launch[1].enabled);
 
         assertEq(faucet.owner(), DEFAULT_SENDER);
 
