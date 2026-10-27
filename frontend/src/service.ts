@@ -69,12 +69,14 @@ const defaultDependencies = {
 };
 export type FaucetDependencies = typeof defaultDependencies;
 
-/** The key's People (tier 2) or People Lite (tier 1) ring on Paseo People, if it has one. */
+/**
+ * The key's People (tier 2) or People Lite (tier 1) ring on Paseo People, if it has one. Matched by chain and
+ * collection: hosts differ on whether a ring names the Members pallet, and the proof uses the ring as declared.
+ */
 function ringOf(key: { rings: readonly RingLocation[] }, tier: number): RingLocation | undefined {
   const collection = bytesToHex(new TextEncoder().encode((tier === 2 ? 'pop:polkadot.network/people' : 'pop:polkadot.network/people-lite').padEnd(32, ' ')));
   return key.rings.find((ring) => ring.chainId.toLowerCase() === PEOPLE_GENESIS
-    && ring.junctions.length === 2 && ring.junctions[0].tag === 'PalletInstance' && ring.junctions[0].value === 67
-    && ring.junctions[1].tag === 'CollectionId' && ring.junctions[1].value.toLowerCase() === collection);
+    && ring.junctions.some((junction) => junction.tag === 'CollectionId' && junction.value.toLowerCase() === collection));
 }
 
 async function allocateFees(request = requestResourceAllocation) {
@@ -91,6 +93,8 @@ function openClient(create: FaucetDependencies['createChainClient']) {
 interface Reader {
   address: Hex;
   productId: string;
+  /** The personhood product that holds People and People Lite keys. */
+  personhood: string;
   client: Awaited<ReturnType<typeof openClient>>;
   runtime: ContractRuntime;
   query<T>(method: string, ...args: unknown[]): Promise<T>;
@@ -122,6 +126,8 @@ export async function openFaucet(address: Hex, productId: string, dependencies: 
     }
     const reader: Reader = {
       address, productId, client, query,
+      // The TLD belongs to the network, so the personhood product shares this product's.
+      personhood: `peopl.${productId.slice(productId.lastIndexOf('.') + 1)}`,
       runtime: createContractRuntimeFromClient(client.raw.assetHub, devnet_asset_hub),
       async refresh(): Promise<Snapshot> {
         const epoch = await query<bigint>('currentEpoch');
@@ -167,7 +173,7 @@ export async function openFaucet(address: Hex, productId: string, dependencies: 
  * for the first claim.
  */
 async function connectAccount(reader: Reader, dependencies: FaucetDependencies): Promise<FaucetService | null> {
-  const { address, productId, client, runtime, query, refresh } = reader;
+  const { address, productId, personhood, client, runtime, query, refresh } = reader;
   const { SignerManager, createContractFromClient, isContractAccountMapped, ensureContractAccountMapped, requestResourceAllocation } = dependencies;
   const signerManager = new SignerManager({ dappName: productId, ss58Prefix: 0 });
   try {
@@ -206,7 +212,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
     const faucet = createContractFromClient(client.raw.assetHub, devnet_asset_hub, address, abi as AbiEntry[], {
       defaultOrigin: productAccount.address, defaultSigner: signer,
     });
-    const listed = await within(signerManager.listRingVrfKeys('peopl.dot'), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
+    const listed = await within(signerManager.listRingVrfKeys(personhood), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
     const heldTiers = listed.ok ? [2, 1].filter((tier) => listed.value.some((key) => ringOf(key, tier))) : [];
     let claiming = false;
     const service: FaucetService = {
@@ -218,7 +224,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
         try {
           // Resource allocation must precede the first contract transaction for a zero-PAS signer.
           await prepareAccount(progress);
-          const keys = await within(signerManager.listRingVrfKeys('peopl.dot'), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
+          const keys = await within(signerManager.listRingVrfKeys(personhood), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
           if (!keys.ok) throw keyRefusal(keys.error);
           // Retry proof preparation only. Never automatically resubmit an uncertain signed transaction.
           for (let attempt = 0; attempt < 2; attempt++) {
