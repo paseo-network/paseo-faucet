@@ -1,0 +1,6 @@
+endpoint:
+  - wss://paseo-asset-hub-next-rpc.polkadot.io
+# Set ASSET_HUB_NEXT_BLOCK to pin the fork; unset forks the latest block.
+block: ${env.ASSET_HUB_NEXT_BLOCK}
+port: 8003
+mock-signature-host: true

@@ -1,0 +1,7 @@
+endpoint:
+  - wss://bulletin-paseo.tservices.es:8443
+  - wss://bullet.sik.rocks
+# Set BULLETIN_BLOCK to pin the fork; unset forks the latest block.
+block: ${env.BULLETIN_BLOCK}
+port: 8002
+mock-signature-host: true

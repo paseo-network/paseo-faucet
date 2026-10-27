@@ -1,0 +1,6 @@
+endpoint:
+  - wss://paseo-bulletin-next-rpc.polkadot.io
+# Set BULLETIN_NEXT_BLOCK to pin the fork; unset forks the latest block.
+block: ${env.BULLETIN_NEXT_BLOCK}
+port: 8004
+mock-signature-host: true

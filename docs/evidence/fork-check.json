@@ -4,7 +4,7 @@
       "paraId": 1000,
       "specName": "asset-hub-paseo",
       "specVersion": 2005004,
-      "forkedAt": 14981957,
+      "forkedAt": 14990973,
       "endpoints": [
         "wss://asset-hub-paseo-rpc.n.dwellir.com",
         "wss://sys.turboflakes.io/asset-hub-paseo"
@@ -15,11 +15,52 @@
       "paraId": 1004,
       "specName": "people-paseo",
       "specVersion": 2005004,
-      "forkedAt": 8214645,
+      "forkedAt": 8223681,
       "endpoints": [
         "wss://rpc.interweb-it.com/people-paseo",
         "wss://people-paseo.gatotech.network",
         "wss://people-paseo.rotko.net"
+      ],
+      "existentialDeposit": "1000000000"
+    },
+    "bulletin": {
+      "paraId": 1010,
+      "specName": "bulletin-paseo",
+      "specVersion": 2005004,
+      "forkedAt": 1391939,
+      "endpoints": [
+        "wss://bulletin-paseo.tservices.es:8443",
+        "wss://bullet.sik.rocks"
+      ],
+      "existentialDeposit": "1000000000"
+    },
+    "assetHubNext": {
+      "paraId": 1500,
+      "specName": "next-asset-hub-paseo",
+      "specVersion": 3004000,
+      "forkedAt": 2363910,
+      "endpoints": [
+        "wss://paseo-asset-hub-next-rpc.polkadot.io"
+      ],
+      "existentialDeposit": "100000000"
+    },
+    "bulletinNext": {
+      "paraId": 1501,
+      "specName": "bulletin-paseo",
+      "specVersion": 1000026,
+      "forkedAt": 2494896,
+      "endpoints": [
+        "wss://paseo-bulletin-next-rpc.polkadot.io"
+      ],
+      "existentialDeposit": "1000000000"
+    },
+    "peopleNext": {
+      "paraId": 1502,
+      "specName": "next-people-paseo",
+      "specVersion": 3004000,
+      "forkedAt": 2350206,
+      "endpoints": [
+        "wss://paseo-people-next-system-rpc.polkadot.io"
       ],
       "existentialDeposit": "1000000000"
     }
@@ -28,7 +69,7 @@
     "endpoint": "wss://paseo-rpc.n.dwellir.com",
     "specName": "paseo",
     "specVersion": 2003001,
-    "block": 1679956,
+    "block": 1683041,
     "paraLifecycles": {
       "1000": "Parathread",
       "1002": "not registered",
@@ -84,8 +125,8 @@
   "harness": {
     "productId": "faucet.dot",
     "epochSeconds": "86400",
-    "address": "0xe640b808f01c58efb71bcd2ee586ee5c98999435",
-    "account": "5HGc6Xm5xJuL3QJSswbP45fVwbMpW8TooEBabzWTomeCUsbs",
+    "address": "0xe5947d410f29ed805894373bf6e3e8f510edec29",
+    "account": "5HFiw5pvD4boNPy3BbSbMZJCRFBRjB25uNTAU35RNbCdUHt1",
     "compiler": "0.8.34+commit.80d5c536",
     "bytecodeKeccak": "0x59545d3d504464298ff16a13fce7e29d1292d7db77cae08347e46bc2fc4ac061"
   },
@@ -98,8 +139,8 @@
     "currentEpoch": "20753",
     "messageFor": {
       "epoch": "20753",
-      "recipient": "0x0dfac10f4842a774cc0a418dc2bf371bd28a0ecf60a9c32d236a159870dd4a02",
-      "message": "0x706173656f2d6661756365743a7632e640b808f01c58efb71bcd2ee586ee5c9899943500000000190f1b4100000000000051110dfac10f4842a774cc0a418dc2bf371bd28a0ecf60a9c32d236a159870dd4a02",
+      "recipient": "0x6aaf6e424697047c50e0730173ab9facd0da22296aa5f354d9c616b9387338de",
+      "message": "0x706173656f2d6661756365743a7632e5947d410f29ed805894373bf6e3e8f510edec2900000000190f1b4100000000000051116aaf6e424697047c50e0730173ab9facd0da22296aa5f354d9c616b9387338de",
       "length": 83,
       "chainId": "420420417"
     },
@@ -116,8 +157,8 @@
       "proof": "0x00",
       "revert": "InvalidProof",
       "weight": {
-        "ref_time": "21765104069",
-        "proof_size": "273709"
+        "ref_time": "22297195337",
+        "proof_size": "356061"
       }
     },
     {
@@ -125,8 +166,8 @@
       "proof": "0x00",
       "revert": "InvalidProof",
       "weight": {
-        "ref_time": "21765104069",
-        "proof_size": "273709"
+        "ref_time": "22297195337",
+        "proof_size": "356061"
       }
     }
   ],
@@ -172,7 +213,7 @@
     "cases": [
       {
         "recipient": "mapped",
-        "account": "0x6fbc109bb49e5bc27d2daf99276496b81003ba8588a7340af9820b4de54d7f62",
+        "account": "0x16edf1dd79dc8571d48d4ba30a23348ad117b60caf40fe267801368bf045f4de",
         "amount": {
           "pas": "250000000000",
           "pusd": "25000000"
@@ -220,7 +261,7 @@
       },
       {
         "recipient": "new",
-        "account": "0x0a35993ee2b786117b920f258aead33aa0e282ae638aaf6b4791e6a1246b9e75",
+        "account": "0xd86a95880f14f3e9185e592cee2f92933136f36acb97d21ce85f396fee2f0ee4",
         "amount": {
           "pas": "250000000000",
           "pusd": "25000000"
@@ -244,7 +285,7 @@
       },
       {
         "recipient": "0xEE",
-        "account": "0xe818e0ea6c06904593184dc638323edfd6ebca3aeeeeeeeeeeeeeeeeeeeeeeee",
+        "account": "0xc5219864e1174ac59161a4331299d3a410617013eeeeeeeeeeeeeeeeeeeeeeee",
         "amount": {
           "pas": "250000000000",
           "pusd": "25000000"
@@ -256,7 +297,7 @@
           "pusd": "25000000"
         },
         "evmView": {
-          "address": "0xe818e0ea6c06904593184dc638323edfd6ebca3a",
+          "address": "0xc5219864e1174ac59161a4331299d3a410617013",
           "balanceWei": "24990000000000000000",
           "pusdBalanceOf": "25000000"
         },
@@ -273,7 +314,7 @@
       },
       {
         "recipient": "new, minimum drip",
-        "account": "0x36d5d917c025f8c95dc724c67224ef68614ca1c03c688791b00d7c3214179b73",
+        "account": "0xa2037595065e5367be60b2b2f23c13e4a3ce62e659823cb0ab1d535925ab74a4",
         "amount": {
           "pas": "100000000",
           "pusd": "10"
@@ -297,7 +338,7 @@
       }
     ],
     "forcedFailure": {
-      "recipient": "0x72efb583a189776f931931f1d3f61d6c2e156113fcb679abdc0cd9d0c9d24cef",
+      "recipient": "0x1ae16d8a07640ba675cd7e2180dd890ea750a89765ebf2d6a74903c1faccb046",
       "amount": {
         "pas": "99999999",
         "pusd": "0"
@@ -329,7 +370,7 @@
       "cases": [
         {
           "case": "drip",
-          "recipient": "0xf28640d7e23fd1c98fa34bcf31770b8d1ae67501e740a2aedcc1b4d200545422",
+          "recipient": "0xc9cb325ef7509af1659aa446a7e609c4403b8da7fd09e8124b139981135719f1",
           "sent": {
             "pas": "250000000000",
             "pusd": "25000000"
@@ -356,7 +397,7 @@
         },
         {
           "case": "minimum drip",
-          "recipient": "0x000ee7f8f156da70d48e84257e50506486f4ff64e6c3094bd24ac8b1004a8329",
+          "recipient": "0x33a763fe7699882dd0152c46dbaa37ffe2ce75bc5bce0307c85efe98f4d4ac63",
           "sent": {
             "pas": "1100000000",
             "pusd": "10000"
@@ -384,6 +425,266 @@
       ],
       "deliveryFeeBound": {
         "deliveryFee": "306150000",
+        "atTheFee": "ok",
+        "belowTheFee": "PayoutFailed"
+      }
+    },
+    {
+      "destination": 1010,
+      "chain": "bulletin",
+      "cases": [
+        {
+          "case": "drip",
+          "recipient": "0xefc43854e891b592783965e4f08fcc84f712758b10beb5e8f3f027190ab9c5ec",
+          "sent": {
+            "pas": "250000000000",
+            "pusd": "0"
+          },
+          "creditedPas": "249928140000",
+          "creditedPusd": "0",
+          "deliveryFee": "305200000",
+          "executionFee": "71860000",
+          "destinationWeightUsed": {
+            "ref_time": "287770000",
+            "proof_size": "7186"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3703918516",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        },
+        {
+          "case": "minimum drip",
+          "recipient": "0x14e5b2fa5736c253244f56b18728dbd5d55413ca1e0a9f6bf8f74295f8b44dd4",
+          "sent": {
+            "pas": "2000000000",
+            "pusd": "0"
+          },
+          "creditedPas": "1928140000",
+          "creditedPusd": "0",
+          "deliveryFee": "305100000",
+          "executionFee": "71860000",
+          "destinationWeightUsed": {
+            "ref_time": "287770000",
+            "proof_size": "7186"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3696598054",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        }
+      ],
+      "deliveryFeeBound": {
+        "deliveryFee": "305200000",
+        "atTheFee": "ok",
+        "belowTheFee": "PayoutFailed"
+      }
+    },
+    {
+      "destination": 1500,
+      "chain": "assetHubNext",
+      "cases": [
+        {
+          "case": "drip",
+          "recipient": "0x33e7eaa051bd75e68c1f589d8b1891566978a6f77a355e5f15f75f455bcf4a46",
+          "sent": {
+            "pas": "250000000000",
+            "pusd": "0"
+          },
+          "creditedPas": "249993591442",
+          "creditedPusd": "0",
+          "deliveryFee": "305200000",
+          "executionFee": "6408558",
+          "destinationWeightUsed": {
+            "ref_time": "565130000",
+            "proof_size": "7268"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3703918516",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        },
+        {
+          "case": "minimum drip",
+          "recipient": "0xa36606c29d2f65b0cd931512e56b1f87abb03312b44723b27cf4621492b48584",
+          "sent": {
+            "pas": "200000000",
+            "pusd": "0"
+          },
+          "creditedPas": "193591442",
+          "creditedPusd": "0",
+          "deliveryFee": "305100000",
+          "executionFee": "6408558",
+          "destinationWeightUsed": {
+            "ref_time": "565130000",
+            "proof_size": "7268"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3694142920",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        }
+      ],
+      "deliveryFeeBound": {
+        "deliveryFee": "305200000",
+        "atTheFee": "ok",
+        "belowTheFee": "PayoutFailed"
+      }
+    },
+    {
+      "destination": 1501,
+      "chain": "bulletinNext",
+      "cases": [
+        {
+          "case": "drip",
+          "recipient": "0x4ee83fc6f638c7c1cdebd58845d39f3f7794392e32af6aa147eee9db440225c2",
+          "sent": {
+            "pas": "250000000000",
+            "pusd": "0"
+          },
+          "creditedPas": "249928140000",
+          "creditedPusd": "0",
+          "deliveryFee": "305200000",
+          "executionFee": "71860000",
+          "destinationWeightUsed": {
+            "ref_time": "300827000",
+            "proof_size": "7186"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3703918516",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        },
+        {
+          "case": "minimum drip",
+          "recipient": "0x3e24d848544fb414973bf2612a4cfc1a661375117ad45cddaccdc4dd21f2e601",
+          "sent": {
+            "pas": "2000000000",
+            "pusd": "0"
+          },
+          "creditedPas": "1928140000",
+          "creditedPusd": "0",
+          "deliveryFee": "305100000",
+          "executionFee": "71860000",
+          "destinationWeightUsed": {
+            "ref_time": "300827000",
+            "proof_size": "7186"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3696598054",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        }
+      ],
+      "deliveryFeeBound": {
+        "deliveryFee": "305200000",
+        "atTheFee": "ok",
+        "belowTheFee": "PayoutFailed"
+      }
+    },
+    {
+      "destination": 1502,
+      "chain": "peopleNext",
+      "cases": [
+        {
+          "case": "drip",
+          "recipient": "0xe7cf6c892abd0c374eab24dd2914bf1edfd86d73ab7c2e5d9a299a237c90347f",
+          "sent": {
+            "pas": "250000000000",
+            "pusd": "0"
+          },
+          "creditedPas": "249999891200",
+          "creditedPusd": "0",
+          "deliveryFee": "305200000",
+          "executionFee": "108800",
+          "destinationWeightUsed": {
+            "ref_time": "1088000000",
+            "proof_size": "29911"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3703918516",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        },
+        {
+          "case": "minimum drip",
+          "recipient": "0xc7466c3a14b09d9361d8e3c3a58a988439a957642179e568f4af29c4e4171ea6",
+          "sent": {
+            "pas": "1100000000",
+            "pusd": "0"
+          },
+          "creditedPas": "1099891200",
+          "creditedPusd": "0",
+          "deliveryFee": "305100000",
+          "executionFee": "108800",
+          "destinationWeightUsed": {
+            "ref_time": "1088000000",
+            "proof_size": "29911"
+          },
+          "trapped": 0,
+          "weight": {
+            "ref_time": "3696598054",
+            "proof_size": "119926"
+          },
+          "storageDeposit": "0",
+          "txFee": "27162536",
+          "xcmUsed": {
+            "ref_time": "3026663000",
+            "proof_size": "20542"
+          }
+        }
+      ],
+      "deliveryFeeBound": {
+        "deliveryFee": "305200000",
         "atTheFee": "ok",
         "belowTheFee": "PayoutFailed"
       }
@@ -418,6 +719,74 @@
       "remoteFeeMargin": "31",
       "deliveryFee": "306150000",
       "deliveryFeeMargin": "16"
+    },
+    {
+      "chain": "bulletin",
+      "id": 1010,
+      "enabled": true,
+      "pasTransfer": 2,
+      "pusdTransfer": 0,
+      "remoteFee": "1000000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "2000000000",
+      "minPusd": "0",
+      "existentialDeposit": "1000000000",
+      "xcmVersion": 5,
+      "maxExecutionFee": "71860000",
+      "remoteFeeMargin": "13",
+      "deliveryFee": "305200000",
+      "deliveryFeeMargin": "16"
+    },
+    {
+      "chain": "assetHubNext",
+      "id": 1500,
+      "enabled": true,
+      "pasTransfer": 2,
+      "pusdTransfer": 0,
+      "remoteFee": "100000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "200000000",
+      "minPusd": "0",
+      "existentialDeposit": "100000000",
+      "xcmVersion": 5,
+      "maxExecutionFee": "6408558",
+      "remoteFeeMargin": "15",
+      "deliveryFee": "305200000",
+      "deliveryFeeMargin": "16"
+    },
+    {
+      "chain": "bulletinNext",
+      "id": 1501,
+      "enabled": true,
+      "pasTransfer": 2,
+      "pusdTransfer": 0,
+      "remoteFee": "1000000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "2000000000",
+      "minPusd": "0",
+      "existentialDeposit": "1000000000",
+      "xcmVersion": 5,
+      "maxExecutionFee": "71860000",
+      "remoteFeeMargin": "13",
+      "deliveryFee": "305200000",
+      "deliveryFeeMargin": "16"
+    },
+    {
+      "chain": "peopleNext",
+      "id": 1502,
+      "enabled": true,
+      "pasTransfer": 2,
+      "pusdTransfer": 0,
+      "remoteFee": "100000000",
+      "maxDeliveryFee": "5000000000",
+      "minPas": "1100000000",
+      "minPusd": "0",
+      "existentialDeposit": "1000000000",
+      "xcmVersion": 5,
+      "maxExecutionFee": "108800",
+      "remoteFeeMargin": "919",
+      "deliveryFee": "305200000",
+      "deliveryFeeMargin": "16"
     }
   ],
   "req18": {
@@ -427,8 +796,8 @@
       "pusd": "25000000"
     },
     "paysEveryDestination": {
-      "recipient": "0x064671849cb48f50082e07fcf590e64a09058f041b376a2fd6aa8721984f6102",
-      "alias": "0xb2e57d97d89694fbf524027bdc000953e6c4af300417dfb2de368a987afe727c",
+      "recipient": "0xf8b124e55feb60e5b19d4213c65e56622fd57f8a3e642f71b25dfa188510af79",
+      "alias": "0xafb350fd58b715f40507a12e503877429ef4da687a1b51dee31095c77f8f1fb0",
       "events": [
         {
           "event": "Dripped",
@@ -460,15 +829,15 @@
         "after": 1
       },
       "weight": {
-        "ref_time": "12704570075",
-        "proof_size": "637506"
+        "ref_time": "13473947431",
+        "proof_size": "761034"
       },
       "storageDeposit": "52800000",
-      "txFee": "71400151"
+      "txFee": "82292233"
     },
     "skipsAFailedPayout": {
-      "recipient": "0xc8ad009763c8f16ceab9b90084aa9b41892b5d755f0a3d4b94d27a461e5170ce",
-      "alias": "0x73c3533e3220839080281262042f768237add07d38466557238e209301000f02",
+      "recipient": "0xa8e0594b9089aeaaa918c3340e7d6d0e53aab06d3a6865bdbeab956510203969",
+      "alias": "0x935811013b70ad7c2e049f5373cf04934c61972979a48051705bdf1c1c8074e5",
       "setup": "People maxDeliveryFee set to 1 plank, below its delivery fee",
       "events": [
         {
@@ -496,19 +865,19 @@
         "after": 2
       },
       "weight": {
-        "ref_time": "12954545795",
-        "proof_size": "658510"
+        "ref_time": "13723923151",
+        "proof_size": "782038"
       },
       "storageDeposit": "26400000",
-      "txFee": "73218320"
+      "txFee": "84110401"
     },
     "nothingPaid": {
       "setup": "Asset Hub disabled, People maxDeliveryFee 1 plank",
       "revert": "PayoutFailed"
     },
     "paysTheSkippedDestinationLater": {
-      "recipient": "0xc8ad009763c8f16ceab9b90084aa9b41892b5d755f0a3d4b94d27a461e5170ce",
-      "alias": "0x73c3533e3220839080281262042f768237add07d38466557238e209301000f02",
+      "recipient": "0xa8e0594b9089aeaaa918c3340e7d6d0e53aab06d3a6865bdbeab956510203969",
+      "alias": "0x935811013b70ad7c2e049f5373cf04934c61972979a48051705bdf1c1c8074e5",
       "setup": "People entry restored",
       "events": [
         {
@@ -535,13 +904,77 @@
         "after": 2
       },
       "weight": {
-        "ref_time": "8352948536",
-        "proof_size": "475301"
+        "ref_time": "9122325892",
+        "proof_size": "598829"
       },
       "storageDeposit": "0",
-      "txFee": "56947726"
+      "txFee": "67839807"
     },
-    "claimAgain": "AlreadyClaimed"
+    "claimAgain": "AlreadyClaimed",
+    "paysEveryLaunchDestination": {
+      "recipient": "0xde3911f0d4a80a222eff161daa89f703f165fea0317f6b1a945c033c6d18cc0f",
+      "arrivals": [
+        {
+          "destination": 1000,
+          "chain": "assetHub",
+          "credited": {
+            "pas": "250000000000",
+            "pusd": "25000000"
+          }
+        },
+        {
+          "destination": 1004,
+          "chain": "people",
+          "credited": {
+            "pas": "249996831873",
+            "pusd": "25000000"
+          }
+        },
+        {
+          "destination": 1010,
+          "chain": "bulletin",
+          "credited": {
+            "pas": "249928140000",
+            "pusd": "0"
+          }
+        },
+        {
+          "destination": 1500,
+          "chain": "assetHubNext",
+          "credited": {
+            "pas": "249993591442",
+            "pusd": "0"
+          }
+        },
+        {
+          "destination": 1501,
+          "chain": "bulletinNext",
+          "credited": {
+            "pas": "249928140000",
+            "pusd": "0"
+          }
+        },
+        {
+          "destination": 1502,
+          "chain": "peopleNext",
+          "credited": {
+            "pas": "249999891200",
+            "pusd": "0"
+          }
+        }
+      ],
+      "faucetSpent": {
+        "pas": "1501526950000",
+        "pusd": "50000000"
+      },
+      "deliveryFees": "1526950000",
+      "weight": {
+        "ref_time": "29442634503",
+        "proof_size": "1202510"
+      },
+      "storageDeposit": "26400000",
+      "txFee": "121269378"
+    }
   },
   "req19": {
     "account": "0x9621dde636de098b43efb0fa9b61facfe328f99d",
@@ -554,7 +987,7 @@
       "pusd": "10000000"
     },
     "assetHub": {
-      "recipient": "0x9c5d3150896959fe58cb20e8b91eb0dfa8eaeaf2b93f89755ff47abbd02936f4",
+      "recipient": "0xea6e91afe14dad3b6c67ff2cf7371e33e86d3b11f822030b34ceec103ce76477",
       "credited": {
         "pas": "1000000000000",
         "pusd": "10000000"
@@ -568,10 +1001,10 @@
         "proof_size": "134898"
       },
       "storageDeposit": "26400000",
-      "txFee": "28632693"
+      "txFee": "28682693"
     },
     "people": {
-      "recipient": "0xa8d93ccfeff2fc9f00b591c44b84074eb85822205a8a7f9769b956ea690cb97e",
+      "recipient": "0x3af3b247209268992e0a1e8eb0e0a8c0491b1f8965bee00e890ebf3c336ae61f",
       "credited": {
         "pas": "999996831873",
         "pusd": "10000000"
@@ -585,7 +1018,7 @@
         "proof_size": "152687"
       },
       "storageDeposit": "0",
-      "txFee": "30101238"
+      "txFee": "30151238"
     },
     "requestedThisEpoch": {
       "pas": "2005000000000",
@@ -601,7 +1034,7 @@
       "destination": 2030,
       "pas": "250000000000",
       "pusd": "25000000",
-      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100b91f010100040100000284d7170008010004010000070063332f3a010004000204320576c8eb0b0002e1f50508140d01020800010100d76edb5e96702d9aa54c65b0e808ed9c532a5205daa536b597c8986f3d008f5f",
+      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100b91f010100040100000284d7170008010004010000070063332f3a010004000204320576c8eb0b0002e1f50508140d01020800010100b878f00ee1d6360c51d31dc6d28debc86d0a1ef34ee7be29cfb68f208e90d91d",
       "weight": {
         "refTime": "5005332000",
         "proofSize": "32715"
@@ -612,7 +1045,7 @@
       "destination": 2034,
       "pas": "250000000000",
       "pusd": "25000000",
-      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100c91f010100040100000284d7170008010004010000070063332f3a000004000204320576c8eb0b0002e1f50508140d01020800010100a8b0fe3a3cf0fc5fe027412b9c6d225f9b0426c86e1894ffb660101f951be724",
+      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100c91f010100040100000284d7170008010004010000070063332f3a000004000204320576c8eb0b0002e1f50508140d0102080001010021150200de2e4bb86e42281ed8e3c2ed663855b273ac4f1d65ea9fa5ad78ec40",
       "weight": {
         "refTime": "5005332000",
         "proofSize": "32715"
@@ -623,7 +1056,7 @@
       "destination": 0,
       "pas": "250000000000",
       "pusd": "0",
-      "program": "0x050c000401000007004429353a2b01310100010000040100000284d7170004000004010000070063332f3a08140d01020400010100c957634d1b7023f33f42fbaa5fca90342703bb0c955a1f54b480a1db5980da22",
+      "program": "0x050c000401000007004429353a2b01310100010000040100000284d7170004000004010000070063332f3a08140d01020400010100917095f36e53dfa1785b275940c222d9a67d3a2a9184dcee4000e83d3e45f6e3",
       "weight": {
         "refTime": "3026663000",
         "proofSize": "20542"
@@ -634,7 +1067,7 @@
       "destination": 1000,
       "pas": "250000000000",
       "pusd": "25000000",
-      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d010208000101006fbc109bb49e5bc27d2daf99276496b81003ba8588a7340af9820b4de54d7f62",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d0102080001010016edf1dd79dc8571d48d4ba30a23348ad117b60caf40fe267801368bf045f4de",
       "weight": {
         "refTime": "2958132000",
         "proofSize": "14958"
@@ -656,7 +1089,7 @@
       "destination": 1000,
       "pas": "250000000000",
       "pusd": "25000000",
-      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d010208000101000a35993ee2b786117b920f258aead33aa0e282ae638aaf6b4791e6a1246b9e75",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d01020800010100d86a95880f14f3e9185e592cee2f92933136f36acb97d21ce85f396fee2f0ee4",
       "weight": {
         "refTime": "2958132000",
         "proofSize": "14958"
@@ -667,7 +1100,7 @@
       "destination": 1000,
       "pas": "250000000000",
       "pusd": "25000000",
-      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d01020800010100e818e0ea6c06904593184dc638323edfd6ebca3aeeeeeeeeeeeeeeeeeeeeeeee",
+      "program": "0x05080008000204320576c8eb0b0002e1f50501000007004429353a0d01020800010100c5219864e1174ac59161a4331299d3a410617013eeeeeeeeeeeeeeeeeeeeeeee",
       "weight": {
         "refTime": "2958132000",
         "proofSize": "14958"
@@ -678,7 +1111,7 @@
       "destination": 1000,
       "pas": "100000000",
       "pusd": "10",
-      "program": "0x05080008000204320576c8eb0b00280100000284d7170d0102080001010036d5d917c025f8c95dc724c67224ef68614ca1c03c688791b00d7c3214179b73",
+      "program": "0x05080008000204320576c8eb0b00280100000284d7170d01020800010100a2037595065e5367be60b2b2f23c13e4a3ce62e659823cb0ab1d535925ab74a4",
       "weight": {
         "refTime": "2958132000",
         "proofSize": "14958"
@@ -689,7 +1122,7 @@
       "destination": 1000,
       "pas": "99999999",
       "pusd": "0",
-      "program": "0x05080004010000fe83d7170d0102040001010072efb583a189776f931931f1d3f61d6c2e156113fcb679abdc0cd9d0c9d24cef",
+      "program": "0x05080004010000fe83d7170d010204000101001ae16d8a07640ba675cd7e2180dd890ea750a89765ebf2d6a74903c1faccb046",
       "weight": {
         "refTime": "1479066000",
         "proofSize": "7479"
@@ -700,7 +1133,7 @@
       "destination": 1004,
       "pas": "250000000000",
       "pusd": "25000000",
-      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100b10f010000040100000284d7170008000004010000070063332f3a000004000204320576c8eb0b0002e1f50508140d01020800010100f28640d7e23fd1c98fa34bcf31770b8d1ae67501e740a2aedcc1b4d200545422",
+      "program": "0x050c0008000204320576c8eb0b0002e1f50501000007004429353a2b0131010100b10f010000040100000284d7170008000004010000070063332f3a000004000204320576c8eb0b0002e1f50508140d01020800010100c9cb325ef7509af1659aa446a7e609c4403b8da7fd09e8124b139981135719f1",
       "weight": {
         "refTime": "5005332000",
         "proofSize": "32715"
@@ -711,10 +1144,98 @@
       "destination": 1004,
       "pas": "1100000000",
       "pusd": "10000",
-      "program": "0x050c0008000204320576c8eb0b00419c0100000300ab90412b0131010100b10f010000040100000284d717000800000401000002286bee000004000204320576c8eb0b00419c08140d01020800010100000ee7f8f156da70d48e84257e50506486f4ff64e6c3094bd24ac8b1004a8329",
+      "program": "0x050c0008000204320576c8eb0b00419c0100000300ab90412b0131010100b10f010000040100000284d717000800000401000002286bee000004000204320576c8eb0b00419c08140d0102080001010033a763fe7699882dd0152c46dbaa37ffe2ce75bc5bce0307c85efe98f4d4ac63",
       "weight": {
         "refTime": "5005332000",
         "proofSize": "32715"
+      }
+    },
+    {
+      "case": "bulletin, drip",
+      "destination": 1010,
+      "pas": "250000000000",
+      "pusd": "0",
+      "program": "0x050c000401000007004429353a2b0131010100c90f0100000401000002286bee000400000401000007007a8ef93908140d01020400010100efc43854e891b592783965e4f08fcc84f712758b10beb5e8f3f027190ab9c5ec",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "bulletin, minimum drip",
+      "destination": 1010,
+      "pas": "2000000000",
+      "pusd": "0",
+      "program": "0x050c000401000003009435772b0131010100c90f0100000401000002286bee000400000401000002286bee08140d0102040001010014e5b2fa5736c253244f56b18728dbd5d55413ca1e0a9f6bf8f74295f8b44dd4",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "assetHubNext, drip",
+      "destination": 1500,
+      "pas": "250000000000",
+      "pusd": "0",
+      "program": "0x050c000401000007004429353a2b01310101007117010000040100000284d7170004000004010000070063332f3a08140d0102040001010033e7eaa051bd75e68c1f589d8b1891566978a6f77a355e5f15f75f455bcf4a46",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "assetHubNext, minimum drip",
+      "destination": 1500,
+      "pas": "200000000",
+      "pusd": "0",
+      "program": "0x050c00040100000208af2f2b01310101007117010000040100000284d71700040000040100000284d71708140d01020400010100a36606c29d2f65b0cd931512e56b1f87abb03312b44723b27cf4621492b48584",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "bulletinNext, drip",
+      "destination": 1501,
+      "pas": "250000000000",
+      "pusd": "0",
+      "program": "0x050c000401000007004429353a2b013101010075170100000401000002286bee000400000401000007007a8ef93908140d010204000101004ee83fc6f638c7c1cdebd58845d39f3f7794392e32af6aa147eee9db440225c2",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "bulletinNext, minimum drip",
+      "destination": 1501,
+      "pas": "2000000000",
+      "pusd": "0",
+      "program": "0x050c000401000003009435772b013101010075170100000401000002286bee000400000401000002286bee08140d010204000101003e24d848544fb414973bf2612a4cfc1a661375117ad45cddaccdc4dd21f2e601",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "peopleNext, drip",
+      "destination": 1502,
+      "pas": "250000000000",
+      "pusd": "0",
+      "program": "0x050c000401000007004429353a2b01310101007917010000040100000284d7170004000004010000070063332f3a08140d01020400010100e7cf6c892abd0c374eab24dd2914bf1edfd86d73ab7c2e5d9a299a237c90347f",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
+      }
+    },
+    {
+      "case": "peopleNext, minimum drip",
+      "destination": 1502,
+      "pas": "1100000000",
+      "pusd": "0",
+      "program": "0x050c00040100000300ab90412b01310101007917010000040100000284d717000400000401000002286bee08140d01020400010100c7466c3a14b09d9361d8e3c3a58a988439a957642179e568f4af29c4e4171ea6",
+      "weight": {
+        "refTime": "3026663000",
+        "proofSize": "20542"
       }
     }
   ]

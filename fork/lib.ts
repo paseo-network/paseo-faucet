@@ -21,6 +21,10 @@ import {
 export const CHAINS = {
   assetHub: 'asset-hub',
   people: 'people',
+  bulletin: 'bulletin',
+  assetHubNext: 'asset-hub-next',
+  bulletinNext: 'bulletin-next',
+  peopleNext: 'people-next',
 } as const;
 export type ChainName = keyof typeof CHAINS;
 
@@ -257,8 +261,10 @@ export async function pas(chain: Chain, who: string): Promise<bigint> {
   return (await query(chain, 'System', 'Account', asSs58(who))).data.free;
 }
 
+/** pUSD held on `chain`; only Asset Hub and People hold it, so it is 0 elsewhere. */
 export async function pusd(chain: Chain, who: string): Promise<bigint> {
-  const asset = chain.name === 'assetHub' ? PUSD_ASSET_ID : PUSD_ON_PEOPLE;
+  const asset = { assetHub: PUSD_ASSET_ID, people: PUSD_ON_PEOPLE }[chain.name as string];
+  if (asset === undefined) return 0n;
   return (await query(chain, 'Assets', 'Account', asset, asSs58(who)))?.balance ?? 0n;
 }
 
