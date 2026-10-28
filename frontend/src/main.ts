@@ -132,15 +132,20 @@ function render() {
     return validate();
   }
   const tier = personTier();
-  if (!service.heldTiers.length) notice('Your Polkadot app has no People or People Lite key this faucet can use.');
+  const noKey = service.notMemberTiers.length
+    ? 'Your personhood is not active in a People ring yet, so the faucet cannot verify it. Try again later.'
+    : 'Your Polkadot app has no People or People Lite key this faucet can use.';
+  if (!service.heldTiers.length) notice(noKey);
   else notice(tier ? claimBlocker(state, tier) ?? '' : 'Claims for your personhood tier are temporarily disabled.');
   const { paid, skipped } = tier ? planPayouts(state.destinations, state, tier) : { paid: [], skipped: [] };
   fillList(el('payout'), paid.length ? [...paid.map(p => ({ text: payoutText(p) })), ...skipped.map(s => ({ text: `${chainInfo(s.id).name}: skipped, ${SKIP_TEXT[s.reason]}` }))] : []);
-  // A key held for the full ring may not be a member of it; the claim then falls back to the lite tier.
-  const fallback = tier === state.full && service?.heldTiers.includes(1) && state.lite.enabled
+  // Unless the host confirmed the membership, a key held for the full ring may not be a member of it; the claim then
+  // falls back to the lite tier.
+  const fallback = tier === state.full && !service.memberConfirmed && service.heldTiers.includes(1) && state.lite.enabled
     ? ` If your full personhood is not active yet, you get the lite amounts instead: ${formatAmount(state.lite.pas, 10)} PAS per chain${state.lite.pusd ? `, plus ${formatAmount(state.lite.pusd, 6)} pUSD where supported` : ''}.`
     : '';
-  el('payout-help').textContent = `For a ${tier === state.full ? 'full' : 'lite'} person.${fallback}${paid.some(p => p.id !== ASSET_HUB) ? ' Other chains deduct their execution fee from the PAS and return what it does not use.' : ''}`;
+  const waiting = tier === state.lite && service.notMemberTiers.includes(2) ? ' Your full personhood is not active in the People ring yet.' : '';
+  el('payout-help').textContent = `For a ${tier === state.full ? 'full' : 'lite'} person.${waiting}${fallback}${paid.some(p => p.id !== ASSET_HUB) ? ' Other chains deduct their execution fee from the PAS and return what it does not use.' : ''}`;
   validate();
 }
 function setBusy(value: boolean) {

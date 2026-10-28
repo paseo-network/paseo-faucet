@@ -7,7 +7,11 @@ const snapshot = {
   lite: { enabled: true, pas: 5000000000000n, pusd: 100000000n },
   full: { enabled: true, pas: 50000000000000n, pusd: 500000000n },
 };
-const account = { address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', heldTiers: [2, 1], destroy() {} };
+const account = {
+  address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+  heldTiers: scenario?.heldTiers ?? [2, 1], memberConfirmed: scenario?.memberConfirmed ?? false, notMemberTiers: scenario?.notMemberTiers ?? [],
+  destroy() {},
+};
 const listeners = new Set();
 const announce = (signedIn) => { scenario.signedIn = signedIn; for (const listener of listeners) listener(signedIn); };
 window.fakeSignOut = () => announce(false);

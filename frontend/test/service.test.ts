@@ -19,9 +19,10 @@ function emitted(eventName: 'Dripped' | 'DripSkipped', destinationId: number, va
     : encodeAbiParameters([{ type: 'uint8' }, { type: 'bytes32' }, { type: 'uint8' }], [2, alias, Number(values[0])]);
   return { type: 'Revive', value: { type: 'ContractEmitted', value: { contract: from, data: hexToBytes(data), topics } } };
 }
-function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; bareRings?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean; pgasResponse?: string } = {}) {
+function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: number[]; contextMismatch?: boolean; fullNotMember?: boolean; permissionDenied?: boolean; failTx?: boolean; failDryOnce?: boolean; mapped?: boolean; pgasBalance?: bigint; productAccountError?: Error; outside?: boolean; bareRings?: boolean; login?: { response?: string; error?: unknown }; stuckAllocation?: boolean; pgasResponse?: string; aliasErrors?: Record<string, string> } = {}) {
   const calls: string[] = [];
   const owners: string[] = [];
+  const aliasHandles: string[] = [];
   const statusListeners = new Set<(status: string) => void>();
   let proofs = 0, txs = 0, drys = 0;
   let transactionArgs: unknown[] = [];
@@ -42,6 +43,13 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
       if (options.listDenied) return { ok: false, error: new Error('NotAllowlisted') };
       const keys = [{ handle: 'full', rings: [ring(false)] }, { handle: 'lite', rings: [ring(true)] }];
       return { ok: true, value: keys.filter((key) => (options.heldKeys ?? ['full', 'lite']).includes(key.handle)) };
+    }
+    async getProductAccountAlias(handle: string, ctx: unknown, location: unknown) {
+      aliasHandles.push(handle);
+      assert.deepEqual(ctx, { productId: 'faucet.dot', suffix: { tag: 'Index', value: 20000 } });
+      assert.deepEqual(location, ring(handle === 'lite'));
+      const tag = options.aliasErrors?.[handle];
+      return tag ? { ok: false, error: hostError(tag) } : { ok: true, value: { context: hexToBytes(context), alias: hexToBytes(alias) } };
     }
     async createRingVRFProof(handle: string, ctx: unknown, location: unknown, message: Uint8Array) {
       calls.push('proof'); ++proofs;
@@ -116,7 +124,7 @@ function setup(options: { heldKeys?: string[]; listDenied?: boolean; claimed?: n
     requestResourceAllocation: async () => { calls.push('pgas'); return options.stuckAllocation ? new Promise(() => {}) : { ok: true, value: [options.pgasResponse ?? 'Allocated'] }; },
   } as unknown as FaucetDependencies;
   return {
-    dependencies, calls, owners, origins, statusListeners,
+    dependencies, calls, owners, aliasHandles, origins, statusListeners,
     get counts() { return { proofs, txs, drys }; }, get transactionArgs() { return transactionArgs; }, get messageArgs() { return messageArgs; }, get loginReason() { return loginReason; },
   };
 }
@@ -208,6 +216,25 @@ test('connect reports the personhood tiers the person holds a key for, from the 
     assert.deepEqual(mock.owners, ['peopl.dot']);
   }
 });
+test('connecting asks the host which keys are ring members, and the preview and the claim keep to the tier it can prove', async () => {
+  const member = setup();
+  const both = await connect(member);
+  assert.deepEqual([both.heldTiers, both.memberConfirmed, both.notMemberTiers, member.aliasHandles], [[2, 1], true, [], ['full']]);
+  const lite = setup({ aliasErrors: { full: 'NotMember' } });
+  const fallback = await connect(lite);
+  assert.deepEqual([fallback.heldTiers, fallback.memberConfirmed, fallback.notMemberTiers, lite.aliasHandles], [[1], true, [2], ['full', 'lite']]);
+  await fallback.claim(recipient, () => {});
+  assert.equal(lite.transactionArgs[0], 1);
+  assert.equal(lite.counts.proofs, 1);
+  const none = await connect(setup({ aliasErrors: { full: 'NotMember', lite: 'NotMember' } }));
+  assert.deepEqual([none.heldTiers, none.notMemberTiers], [[], [2, 1]]);
+});
+test('a host that cannot tell membership leaves the tiers unconfirmed until a claim proves one', async () => {
+  const faucet = await connect(setup({ aliasErrors: { full: 'Rejected' } }));
+  assert.deepEqual([faucet.heldTiers, faucet.memberConfirmed, faucet.notMemberTiers], [[2, 1], false, []]);
+  await faucet.claim(recipient, () => {});
+  assert.equal(faucet.memberConfirmed, true);
+});
 test('a ring declared without the Members pallet still proves, as declared', async () => {
   const mock = setup({ bareRings: true });
   await (await connect(mock)).claim(recipient, () => {});
@@ -247,7 +274,7 @@ test('NotMember permits a lite fallback, while host permission failures stop imm
   assert.deepEqual(fallback.heldTiers, [2, 1]);
   await fallback.claim(recipient, () => {});
   assert.equal(lite.transactionArgs[0], 1);
-  assert.deepEqual(fallback.heldTiers, [1]);
+  assert.deepEqual([fallback.heldTiers, fallback.notMemberTiers, fallback.memberConfirmed], [[1], [2], true]);
   const denied = setup({ permissionDenied: true });
   const faucet = await connect(denied);
   await assert.rejects(faucet.claim(recipient, () => {}), /does not allow the faucet to use your personhood proof/);

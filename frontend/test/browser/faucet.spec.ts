@@ -20,7 +20,7 @@ test.describe('a deployed faucet in a Polkadot host', () => {
   test.use({ baseURL: 'http://127.0.0.1:4174' });
   const fakeService = readFileSync(new URL('./fake-service.js', import.meta.url), 'utf8');
   /** Serves the page with `src/service.ts` replaced by a host scripted with `host`. */
-  async function openWith(page: Page, host: { inside: boolean; signedIn?: boolean; login?: string }) {
+  async function openWith(page: Page, host: { inside: boolean; signedIn?: boolean; login?: string; heldTiers?: number[]; memberConfirmed?: boolean; notMemberTiers?: number[] }) {
     await page.addInitScript((scenario) => { (window as unknown as { fakeHost: unknown }).fakeHost = scenario; }, host);
     await page.route('**/src/service.ts*', route => route.fulfill({ contentType: 'text/javascript', body: fakeService }));
     await page.goto('/');
@@ -59,6 +59,25 @@ test.describe('a deployed faucet in a Polkadot host', () => {
     await expect(page.locator('#connect')).toBeHidden();
     await expect(page.locator('#payout')).toContainText('Asset Hub: 5,000 PAS + 500 pUSD');
     expect(await logins(page)).toBe(1);
+  });
+
+  test('a full key not yet in its ring previews the lite amounts and says why', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: true, heldTiers: [1], memberConfirmed: true, notMemberTiers: [2] });
+    await expect(page.locator('#payout')).toContainText('Asset Hub: 500 PAS + 100 pUSD');
+    await expect(page.locator('#payout-help')).toHaveText('For a lite person. Your full personhood is not active in the People ring yet.');
+    await expect(page.locator('#claim')).toBeEnabled();
+  });
+
+  test('a confirmed full member sees the full amounts without the lite caveat', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: true, memberConfirmed: true });
+    await expect(page.locator('#payout')).toContainText('Asset Hub: 5,000 PAS + 500 pUSD');
+    await expect(page.locator('#payout-help')).toHaveText('For a full person.');
+  });
+
+  test('keys that are not in any ring yet are explained, and nothing can be claimed', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: true, heldTiers: [], memberConfirmed: false, notMemberTiers: [2, 1] });
+    await expect(page.locator('#notice')).toHaveText('Your personhood is not active in a People ring yet, so the faucet cannot verify it. Try again later.');
+    await expect(page.locator('#claim')).toBeDisabled();
   });
 
   test('a cancelled sign-in keeps the faucet read-only', async ({ page }) => {

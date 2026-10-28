@@ -14,6 +14,8 @@ const READ_TIMEOUT_MS = 60_000;
 const APPROVAL_TIMEOUT_MS = 120_000;
 /** How long the host's sign-in, such as pairing the Polkadot app, may take. */
 const SIGN_IN_TIMEOUT_MS = 300_000;
+/** How long connecting waits for the host to check a personhood key's ring membership. */
+const MEMBERSHIP_TIMEOUT_MS = 20_000;
 
 function errorText(value: unknown): string {
   if (value instanceof Error) return value.message;
@@ -213,11 +215,36 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
       defaultOrigin: productAccount.address, defaultSigner: signer,
     });
     const listed = await within(signerManager.listRingVrfKeys(personhood), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
-    const heldTiers = listed.ok ? [2, 1].filter((tier) => listed.value.some((key) => ringOf(key, tier))) : [];
+    const heldKeys = listed.ok ? listed.value : [];
+    const heldTiers = [2, 1].filter((tier) => heldKeys.some((key) => ringOf(key, tier)));
+    /** Whether the host reports the tier's key a member of its ring; undefined when it cannot tell. */
+    async function isMember(tier: number, epoch: bigint): Promise<boolean | undefined> {
+      const key = heldKeys.find((k) => ringOf(k, tier))!;
+      const context = { productId, suffix: { tag: 'Index' as const, value: Number(epoch) } };
+      try {
+        // The host derives a contextual alias only for a ring member, and without creating a proof.
+        const alias = await within(signerManager.getProductAccountAlias(key.handle, context, ringOf(key, tier)!), MEMBERSHIP_TIMEOUT_MS, 'Checking your personhood');
+        if (alias.ok) return true;
+        return hostTags(alias.error).includes('NotMember') ? false : undefined;
+      } catch { return undefined; }
+    }
+    const notMemberTiers: number[] = [];
+    let memberConfirmed = false;
+    if (heldTiers.length) {
+      const epoch = await query<bigint>('currentEpoch');
+      for (const tier of [...heldTiers]) {
+        const member = await isMember(tier, epoch);
+        if (member === false) { heldTiers.splice(heldTiers.indexOf(tier), 1); notMemberTiers.push(tier); continue; }
+        memberConfirmed = member === true;
+        break;
+      }
+    }
     let claiming = false;
     const service: FaucetService = {
       address: productAccount.address,
       heldTiers,
+      memberConfirmed,
+      notMemberTiers,
       async claim(recipient, progress) {
         if (claiming) throw new Error('A claim is already in progress.');
         claiming = true;
@@ -236,7 +263,7 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
             const candidates: { tier: number; key: typeof keys.value[number]; ring: RingLocation }[] = [];
             for (const tier of [2, 1]) {
               const config = tier === 2 ? state.full : state.lite;
-              if (!config.enabled) continue;
+              if (!config.enabled || !service.heldTiers.includes(tier)) continue;
               for (const key of keys.value) {
                 const ring = ringOf(key, tier);
                 if (ring) { candidates.push({ tier, key, ring }); break; }
@@ -253,11 +280,14 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
               if (!proof.ok) {
                 if (hostTags(proof.error).includes('NotMember')) {
                   service.heldTiers = service.heldTiers.filter((tier) => tier !== candidate.tier);
+                  service.notMemberTiers = [...service.notMemberTiers, candidate.tier];
+                  service.memberConfirmed = false;
                   continue;
                 }
                 throw keyRefusal(proof.error); // Permission failures must not be hidden by a tier fallback.
               }
               if (!bytesEqual(proof.value.contextualAlias.context, context)) throw new Error('The host proof context does not match the faucet.');
+              if (candidate.tier === service.heldTiers[0]) service.memberConfirmed = true;
               const alias = bytesToHex(proof.value.contextualAlias.alias);
               const enabled = state.destinations.filter((d) => d.enabled);
               const claimed = await Promise.all(enabled.map((d) => query<boolean>('hasClaimed', state.epoch, candidate.tier, alias, d.id)));
