@@ -49,8 +49,15 @@ export interface FaucetHost {
 }
 export interface FaucetService {
   address: string;
-  /** The tiers the person holds a personhood key for, full (2) before lite (1); a claim drops one the host reports the key is not a member for. */
+  /**
+   * The tiers the person holds a personhood key for, full (2) before lite (1), without those whose key the host reports is
+   * not a member of its ring, at connecting or at a claim.
+   */
   heldTiers: number[];
+  /** Whether the host confirmed that the first held tier's key is a ring member, so a claim pays that tier. */
+  memberConfirmed: boolean;
+  /** The tiers whose key the host reports is not a member of its ring yet, such as a full personhood still onboarding. */
+  notMemberTiers: number[];
   claim(recipient: Hex, progress: (message: string) => void): Promise<Receipt>;
   destroy(): void;
 }
