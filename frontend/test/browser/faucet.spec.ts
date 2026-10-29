@@ -80,6 +80,14 @@ test.describe('a deployed faucet in a Polkadot host', () => {
     await expect(page.locator('#claim')).toBeDisabled();
   });
 
+  test('after a claim, the receipt shows and the claims this period count it', async ({ page }) => {
+    await openWith(page, { inside: true, signedIn: true, heldTiers: [1], memberConfirmed: true });
+    await expect(page.locator('#faucet-status')).toHaveText('10 / 1,000 claims this period');
+    await page.locator('#claim').click();
+    await expect(page.locator('#success-list')).toContainText('Asset Hub: 500 PAS + 100 pUSD');
+    await expect(page.locator('#faucet-status')).toHaveText('11 / 1,000 claims this period');
+  });
+
   test('a cancelled sign-in keeps the faucet read-only', async ({ page }) => {
     await openWith(page, { inside: true, signedIn: false, login: 'Rejected' });
     await page.getByRole('button', { name: 'Connect Polkadot app' }).click();

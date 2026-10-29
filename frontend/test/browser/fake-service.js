@@ -10,6 +10,10 @@ const snapshot = {
 const account = {
   address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
   heldTiers: scenario?.heldTiers ?? [2, 1], memberConfirmed: scenario?.memberConfirmed ?? false, notMemberTiers: scenario?.notMemberTiers ?? [],
+  async claim(recipient) {
+    snapshot.used += 1;
+    return { txHash: `0x${'aa'.repeat(32)}`, recipient, paid: [{ id: 1000, pas: 5000000000000n, pusd: 100000000n }], skipped: [] };
+  },
   destroy() {},
 };
 const listeners = new Set();
