@@ -94,10 +94,11 @@ The integration:
    by the contract's rules (minimum, balance including `maxDeliveryFee`, pUSD where offered).
 4. Selects People or People Lite keys of the personhood product (`peopl.` and this product's
    TLD) by declared ring metadata: public Paseo People genesis and collection, whether or not
-   the ring names the Members pallet. It does not assume foreign key indexes. At connecting it
-   asks the host for each key's alias for the current period, which the host gives only for a
-   ring member and without creating a proof, so the preview shows the tier a claim will pay and
-   names a full personhood that is not in the People ring yet.
+   the ring names the Members pallet. It does not assume foreign key indexes. At connecting,
+   a person holding a full key gets one proof over a fixed text that no claim accepts: the host
+   checks ring membership before it proves, so a full key that is not in the People ring yet
+   fails at once with `NotMember`. The preview then shows the lite amounts and says why, and the
+   claim proves lite directly.
 5. Requests a proof, checks its context, SCALE-prefixes it, and checks the alias's quota with
    `hasClaimed(epoch, tier, alias, id)` for every enabled chain: an alias every enabled chain
    has paid this epoch is done, one with chains still due claims them. Full is preferred; a

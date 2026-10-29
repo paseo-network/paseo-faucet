@@ -118,14 +118,17 @@ function personTier(): TierConfig | undefined {
   const config: Record<number, TierConfig> = { 2: state.full, 1: state.lite };
   return service.heldTiers.map(t => config[t]).find(t => t.enabled);
 }
+/** The faucet's claims this period, or that it is paused, in the footer. */
+function showStatus() {
+  if (!state) return;
+  const next = new Date(Number(state.nextEpochStart) * 1000);
+  el('faucet-status').textContent = state.paused ? 'Faucet paused' : `${state.used.toLocaleString()} / ${state.cap.toLocaleString()} claims this period`;
+  el('faucet-status').title = `Next period: ${next.toLocaleString()}`;
+  el('faucet-dot').classList.toggle('online', !state.paused && state.used < state.cap);
+  el('refresh').hidden = false;
+}
 function render() {
-  if (state) {
-    const next = new Date(Number(state.nextEpochStart) * 1000);
-    el('faucet-status').textContent = state.paused ? 'Faucet paused' : `${state.used.toLocaleString()} / ${state.cap.toLocaleString()} claims this period`;
-    el('faucet-status').title = `Next period: ${next.toLocaleString()}`;
-    el('faucet-dot').classList.toggle('online', !state.paused && state.used < state.cap);
-    el('refresh').hidden = false;
-  }
+  showStatus();
   if (!state || !service) {
     notice(idle.text, idle.kind);
     fillList(el('payout'), []);
@@ -250,7 +253,7 @@ form.addEventListener('submit', async (event) => {
     const receipt = await service.claim(recipient, message => { notice(`${message}…`); claimButton.textContent = message.startsWith('Confirm ') ? 'Confirm in your Polkadot app' : message; });
     form.hidden = true; el('success').hidden = false;
     showReceipt(receipt);
-    try { if (host) state = await host.refresh(); } catch { /* Keep the successful receipt visible if refresh fails. */ }
+    try { if (host) { state = await host.refresh(); showStatus(); } } catch { /* Keep the successful receipt visible if refresh fails. */ }
   } catch (error) { notice((error as Error).message, 'error'); }
   finally { claimButton.textContent = 'Get some PAS'; setBusy(false); }
 });
