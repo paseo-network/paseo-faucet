@@ -14,8 +14,10 @@ const READ_TIMEOUT_MS = 60_000;
 const APPROVAL_TIMEOUT_MS = 120_000;
 /** How long the host's sign-in, such as pairing the Polkadot app, may take. */
 const SIGN_IN_TIMEOUT_MS = 300_000;
-/** How long connecting waits for the host to check a personhood key's ring membership. */
-const MEMBERSHIP_TIMEOUT_MS = 20_000;
+/** How long connecting waits for the proof that shows whether the full key is in its ring. */
+const MEMBERSHIP_TIMEOUT_MS = 45_000;
+/** What that proof signs: never a faucet message, so the proof cannot claim. */
+const MEMBERSHIP_MESSAGE = new TextEncoder().encode('paseo-faucet: membership check');
 
 function errorText(value: unknown): string {
   if (value instanceof Error) return value.message;
@@ -217,27 +219,25 @@ async function connectAccount(reader: Reader, dependencies: FaucetDependencies):
     const listed = await within(signerManager.listRingVrfKeys(personhood), APPROVAL_TIMEOUT_MS, 'Reading your personhood keys');
     const heldKeys = listed.ok ? listed.value : [];
     const heldTiers = [2, 1].filter((tier) => heldKeys.some((key) => ringOf(key, tier)));
-    /** Whether the host reports the tier's key a member of its ring; undefined when it cannot tell. */
-    async function isMember(tier: number, epoch: bigint): Promise<boolean | undefined> {
-      const key = heldKeys.find((k) => ringOf(k, tier))!;
-      const context = { productId, suffix: { tag: 'Index' as const, value: Number(epoch) } };
+    /**
+     * Whether the full key is a member of its ring; undefined when the host cannot tell. Only a proof shows it: the host
+     * checks membership before it proves, so a key outside the ring fails at once with `NotMember`.
+     */
+    async function fullKeyIsMember(): Promise<boolean | undefined> {
+      const key = heldKeys.find((k) => ringOf(k, 2))!;
       try {
-        // The host derives a contextual alias only for a ring member, and without creating a proof.
-        const alias = await within(signerManager.getProductAccountAlias(key.handle, context, ringOf(key, tier)!), MEMBERSHIP_TIMEOUT_MS, 'Checking your personhood');
-        if (alias.ok) return true;
-        return hostTags(alias.error).includes('NotMember') ? false : undefined;
+        const context = { productId, suffix: { tag: 'Index' as const, value: Number(await query<bigint>('currentEpoch')) } };
+        const proof = await within(signerManager.createRingVRFProof(key.handle, context, ringOf(key, 2)!, MEMBERSHIP_MESSAGE), MEMBERSHIP_TIMEOUT_MS, 'Checking your personhood');
+        if (proof.ok) return true;
+        return hostTags(proof.error).includes('NotMember') ? false : undefined;
       } catch { return undefined; }
     }
     const notMemberTiers: number[] = [];
     let memberConfirmed = false;
-    if (heldTiers.length) {
-      const epoch = await query<bigint>('currentEpoch');
-      for (const tier of [...heldTiers]) {
-        const member = await isMember(tier, epoch);
-        if (member === false) { heldTiers.splice(heldTiers.indexOf(tier), 1); notMemberTiers.push(tier); continue; }
-        memberConfirmed = member === true;
-        break;
-      }
+    if (heldTiers[0] === 2) {
+      const member = await fullKeyIsMember();
+      if (member === false) { heldTiers.shift(); notMemberTiers.push(2); }
+      memberConfirmed = member === true;
     }
     let claiming = false;
     const service: FaucetService = {
