@@ -9,6 +9,8 @@
     "fork": "chopsticks xcm -p chopsticks/asset-hub.yml -p chopsticks/people.yml -p chopsticks/bulletin.yml -p chopsticks/asset-hub-next.yml -p chopsticks/bulletin-next.yml -p chopsticks/people-next.yml",
     "precheck": "forge build --root ../contracts",
     "check": "tsx check.ts",
+    "prespike:nft-credits": "cd ../pvm/nft-credit-grant && RUSTC_BOOTSTRAP=1 cargo build --release && cd ../link-revive && cargo run --release -- ../nft-credit-grant/target/riscv64emac-unknown-none-polkavm/release/nft-credit-grant ../nft-credit-grant/nft-credit-grant.polkavm",
+    "spike:nft-credits": "tsx spike-nft-credits.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

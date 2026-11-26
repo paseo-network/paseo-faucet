@@ -1,0 +1,10 @@
+[workspace]
+
+[package]
+name = "link-revive"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+polkavm-linker = "=0.35.0"

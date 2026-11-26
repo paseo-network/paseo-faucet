@@ -1,0 +1,21 @@
+[workspace]
+
+[package]
+name = "nft-credit-grant"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "nft-credit-grant"
+path = "src/main.rs"
+
+[dependencies]
+uapi = { package = "pallet-revive-uapi", version = "=0.15.7", default-features = false }
+polkavm-derive = "=0.35.0"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"

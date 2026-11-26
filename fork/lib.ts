@@ -61,8 +61,8 @@ export interface Chain {
   codecs: ReturnType<typeof getDynamicBuilder>;
 }
 
-export interface Network {
-  chains: Record<ChainName, Chain>;
+export interface Network<N extends ChainName = ChainName> {
+  chains: Record<N, Chain>;
   close(): Promise<void>;
 }
 
@@ -105,12 +105,13 @@ export interface CallResult {
 }
 
 /**
- * Starts chopsticks forks of every chain in `CHAINS` with their HRMP channels connected (xcm mode) and connects
- * to them. Blocks are built only on demand: by `send` (one block per extrinsic) and `untilEvent`. `close()` stops
- * everything.
+ * Starts chopsticks forks of the given chains, every chain in `CHAINS` by default, with their HRMP channels
+ * connected (xcm mode) and connects to them. Blocks are built only on demand: by `send` (one block per extrinsic),
+ * `untilEvent` and `newBlock`. `close()` stops everything.
  */
-export async function startNetwork(): Promise<Network> {
-  const names = Object.keys(CHAINS) as ChainName[];
+export async function startNetwork<N extends ChainName = ChainName>(
+  names = Object.keys(CHAINS) as N[],
+): Promise<Network<N>> {
   process.env.LOG_LEVEL ??= 'warn';
   // chopsticks reads LOG_LEVEL when it loads.
   const { BuildBlockMode, connectParachains, destroyWorker, fetchConfig, setupWithServer } = await import(
@@ -120,7 +121,7 @@ export async function startNetwork(): Promise<Network> {
   mkdirSync(cache, { recursive: true });
   const servers: Awaited<ReturnType<typeof setupWithServer>>[] = [];
   const sources: Chain['source'][] = [];
-  const chains = {} as Record<ChainName, Chain>;
+  const chains = {} as Record<N, Chain>;
   const close = async () => {
     Object.values<Chain>(chains).forEach((c) => c.client.destroy());
     await Promise.all(servers.map((s) => s.close()));
@@ -269,12 +270,13 @@ export async function pusd(chain: Chain, who: string): Promise<bigint> {
 }
 
 /**
- * Signs `tx` as Alice with a fake signature (the forks run with `mock-signature-host`), validates it, builds a
- * block with it and returns the extrinsic's outcome and events. An invalid transaction throws.
+ * Signs `tx` as `signer`, Alice by default, with a fake signature (the forks run with `mock-signature-host`),
+ * validates it, builds a block with it and returns the outcome and events of the extrinsic. An invalid transaction
+ * throws.
  */
-export async function send(chain: Chain, tx: Transaction<any>) {
-  const nonce = await chain.client._request<number, [string]>('system_accountNextIndex', [ALICE]);
-  const extrinsic = bytesToHex(await tx.create(getFakeTxCreator(ALICE), { nonce, mortality: { mortal: false } }));
+export async function send(chain: Chain, tx: Transaction<any>, signer = ALICE) {
+  const nonce = await chain.client._request<number, [string]>('system_accountNextIndex', [signer]);
+  const extrinsic = bytesToHex(await tx.create(getFakeTxCreator(signer), { nonce, mortality: { mortal: false } }));
   const parent = await head(chain);
   const validity = chain.codecs
     .buildRuntimeCall('TaggedTransactionQueue', 'validate_transaction')
@@ -299,8 +301,8 @@ export async function send(chain: Chain, tx: Transaction<any>) {
 }
 
 /** Like `send`, but throws when the extrinsic fails. */
-export async function submit(chain: Chain, tx: Transaction<any>): Promise<ChainEvent[]> {
-  const result = await send(chain, tx);
+export async function submit(chain: Chain, tx: Transaction<any>, signer = ALICE): Promise<ChainEvent[]> {
+  const result = await send(chain, tx, signer);
   if (!result.ok) throw new Error(`${chain.name}: extrinsic failed: ${json(result.dispatchError)}`);
   return result.events;
 }
@@ -330,13 +332,24 @@ function decodeRevert(abi: Abi, data: Uint8Array): Revert {
 }
 
 /** Deploys EVM bytecode with `Revive.instantiate_with_code`, using a `ReviveApi` dry run's limits. */
-export async function deploy(
+export const deploy = (ah: Chain, artifact: Artifact, args: readonly unknown[] = []) =>
+  instantiate(
+    ah,
+    hexToBytes(encodeDeployData({ abi: artifact.abi, bytecode: artifact.bytecode, args })),
+    new Uint8Array(),
+    artifact.abi,
+  );
+
+/**
+ * Deploys `code`, EVM bytecode or a PolkaVM blob, with constructor input `data` through
+ * `Revive.instantiate_with_code`, using the limits of a `ReviveApi` dry run.
+ */
+export async function instantiate(
   ah: Chain,
-  artifact: Artifact,
-  args: readonly unknown[] = [],
+  code: Uint8Array,
+  data: Uint8Array,
+  abi: Abi = [],
 ): Promise<{ address: Hex; events: ChainEvent[] }> {
-  const code = hexToBytes(encodeDeployData({ abi: artifact.abi, bytecode: artifact.bytecode, args }));
-  const data = new Uint8Array();
   // A fresh CREATE2 salt, because a forked account's nonce may point at a contract it already deployed.
   const salt = bytesToHex(randomBytes(32));
   const upload = { type: 'Upload', value: code };
@@ -345,7 +358,7 @@ export async function deploy(
   const dry = await runtimeCall(ah, 'ReviveApi', 'instantiate', ALICE, value, noLimit, noLimit, upload, data, salt);
   if (!dry.result.success) throw new Error(`instantiate dry run failed: ${json(dry.result.value)}`);
   if (dry.result.value.result.flags & REVERT_FLAG) {
-    throw new Error(`constructor reverted: ${json(decodeRevert(artifact.abi, dry.result.value.result.data))}`);
+    throw new Error(`constructor reverted: ${json(decodeRevert(abi, dry.result.value.result.data))}`);
   }
   const tx = ah.api.tx.Revive.instantiate_with_code({
     value,
